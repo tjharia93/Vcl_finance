@@ -1,0 +1,36 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block page_content %}
+<div class="page">
+  <div class="page-head">
+    <h1>New Weekly Sheet</h1>
+  </div>
+
+  <form class="form-card" method="post" action="/petty-cash/new">
+    <input type="hidden" name="csrf_token" value="{{ frappe.session.csrf_token }}">
+
+    <div class="field">
+      <label for="week_ending">Week Ending (Friday)</label>
+      <input type="date" id="week_ending" name="week_ending" value="{{ suggested_date }}" required>
+    </div>
+    <div class="field">
+      <label for="custodian_name">Custodian</label>
+      <input type="text" id="custodian_name" name="custodian_name" value="Shiro" required>
+    </div>
+    <div class="field">
+      <label for="opening_balance">Opening Balance (KES)</label>
+      <input type="number" step="0.01" id="opening_balance" name="opening_balance" value="0">
+    </div>
+    <div class="field">
+      <label for="authorised_float">Authorised Float (KES)</label>
+      <input type="number" step="0.01" id="authorised_float" name="authorised_float" value="50000">
+    </div>
+    <div style="display:flex;gap:8px;margin-top:16px">
+      <button type="submit" class="btn btn-primary">Create Sheet</button>
+      <a href="/petty-cash/" class="btn btn-ghost">Cancel</a>
+    </div>
+  </form>
+</div>
+{% endblock %}

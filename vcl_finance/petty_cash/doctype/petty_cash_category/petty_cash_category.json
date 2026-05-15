@@ -1,0 +1,81 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "field:code",
+ "creation": "2026-05-15 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "code",
+  "label",
+  "gl_account",
+  "disabled"
+ ],
+ "fields": [
+  {
+   "fieldname": "code",
+   "fieldtype": "Data",
+   "label": "Code",
+   "length": 8,
+   "reqd": 1,
+   "unique": 1,
+   "description": "Short code shown on the voucher register (TG, TE, SE, OA, CM, OT)."
+  },
+  {
+   "fieldname": "label",
+   "fieldtype": "Data",
+   "label": "Label",
+   "reqd": 1,
+   "description": "Human-readable category label, e.g. 'Transport — Goods'."
+  },
+  {
+   "fieldname": "gl_account",
+   "fieldtype": "Link",
+   "label": "GL Account",
+   "options": "Account",
+   "description": "Optional — GL account this category debits on Journal Entry posting (Phase 3)."
+  },
+  {
+   "fieldname": "disabled",
+   "fieldtype": "Check",
+   "label": "Disabled",
+   "default": "0"
+  }
+ ],
+ "links": [],
+ "modified": "2026-05-15 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Petty Cash",
+ "name": "Petty Cash Category",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "code",
+ "sort_order": "ASC",
+ "states": [],
+ "track_changes": 1
+}

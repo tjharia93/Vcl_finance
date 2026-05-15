@@ -1,0 +1,42 @@
+{
+ "actions": [],
+ "creation": "2026-05-15 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "row_idx",
+  "txn_date",
+  "entry_type",
+  "recipient",
+  "staff_id",
+  "reason",
+  "amount",
+  "paye",
+  "recipient_signed",
+  "authorised_signed"
+ ],
+ "fields": [
+  {"fieldname": "row_idx", "fieldtype": "Int", "label": "Row", "in_list_view": 1, "columns": 1, "read_only": 1},
+  {"fieldname": "txn_date", "fieldtype": "Date", "label": "Date", "in_list_view": 1, "columns": 1},
+  {"fieldname": "entry_type", "fieldtype": "Select", "label": "Type", "options": "Wage\nLoan", "in_list_view": 1, "columns": 1, "default": "Wage"},
+  {"fieldname": "recipient", "fieldtype": "Data", "label": "Recipient", "in_list_view": 1, "columns": 2},
+  {"fieldname": "staff_id", "fieldtype": "Data", "label": "Staff ID", "length": 20},
+  {"fieldname": "reason", "fieldtype": "Data", "label": "Reason / Reference"},
+  {"fieldname": "amount", "fieldtype": "Currency", "label": "Amount", "options": "currency", "non_negative": 1, "in_list_view": 1, "columns": 2, "default": "0"},
+  {"fieldname": "paye", "fieldtype": "Check", "label": "PAYE applies", "default": "0"},
+  {"fieldname": "recipient_signed", "fieldtype": "Check", "label": "Recipient signed", "default": "0"},
+  {"fieldname": "authorised_signed", "fieldtype": "Check", "label": "Authoriser signed", "default": "0"}
+ ],
+ "istable": 1,
+ "links": [],
+ "modified": "2026-05-15 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Petty Cash",
+ "name": "Petty Cash Wages Entry",
+ "owner": "Administrator",
+ "permissions": [],
+ "sort_field": "row_idx",
+ "sort_order": "ASC",
+ "states": []
+}

@@ -1,0 +1,2 @@
+# frappe -- no version specified in install requirements as it is installed
+# during bench setup. Listed here for reference only.

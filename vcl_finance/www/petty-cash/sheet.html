@@ -1,0 +1,281 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head_include %}
+<meta name="csrf_token" content="{{ frappe.session.csrf_token }}">
+{% endblock %}
+
+{% block page_content %}
+<div class="page" data-pc-editor="1" data-pc-sheet="{{ doc.name }}">
+  <div class="page-head">
+    <div>
+      <h1>Week {{ doc.week_no }} — Ending {{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }}</h1>
+      <div class="meta">
+        Custodian: <strong>{{ doc.custodian_name }}</strong>
+        · Status: <span class="status-pill status-{{ doc.status }}">{{ doc.status }}</span>
+        · <span id="pc-save-indicator" style="color:#8A909E">Auto-saves on blur</span>
+      </div>
+    </div>
+    <div class="page-actions">
+      <a href="/petty-cash/print?name={{ doc.name|urlencode }}&copies=1" target="_blank" class="btn btn-ghost">Print Single</a>
+      <a href="/petty-cash/print?name={{ doc.name|urlencode }}&copies=3" target="_blank" class="btn btn-ghost">Print 3-Sheet</a>
+      <a href="/petty-cash/" class="btn btn-ghost">Back to Sheets</a>
+      <a href="/app/petty-cash-sheet/{{ doc.name|urlencode }}" class="btn btn-ghost" target="_blank">Open in Desk</a>
+    </div>
+  </div>
+
+  <!-- META BAR -->
+  <div class="meta-bar">
+    <label>Custodian
+      <input type="text" name="custodian_name" value="{{ doc.custodian_name or '' }}" data-pc-meta>
+    </label>
+    <label>Opening Balance (KES)
+      <input type="number" step="0.01" name="opening_balance" value="{{ doc.opening_balance or 0 }}" data-pc-meta>
+    </label>
+    <label>Authorised Float (KES)
+      <input type="number" step="0.01" name="authorised_float" value="{{ doc.authorised_float or 0 }}" data-pc-meta>
+    </label>
+    <label>Cash Count End of Week (KES)
+      <input type="number" step="0.01" name="cash_count_end" value="{{ doc.cash_count_end or 0 }}" data-pc-meta>
+    </label>
+    <label>Status
+      <select name="status" data-pc-meta>
+        {% for s in ["Draft", "Submitted", "Approved"] %}
+        <option value="{{ s }}" {% if doc.status==s %}selected{% endif %}>{{ s }}</option>
+        {% endfor %}
+      </select>
+    </label>
+  </div>
+
+  <!-- LIVE SUMMARY -->
+  <div class="summary-panel">
+    <h3>Live Summary</h3>
+    <div class="summary-grid">
+      <div class="summary-cell"><div class="label">Total Out</div><div class="value" id="sum-total-out">{{ "{:,.0f}".format(doc.total_out or 0) }}</div></div>
+      <div class="summary-cell green"><div class="label">Total In</div><div class="value" id="sum-cash-in">{{ "{:,.0f}".format(doc.total_in or 0) }}</div></div>
+      <div class="summary-cell"><div class="label">Vouchers</div><div class="value" id="sum-voucher-out">—</div></div>
+      <div class="summary-cell"><div class="label">Parking</div><div class="value" id="sum-parking">—</div></div>
+      <div class="summary-cell"><div class="label">Bike + Forklift</div><div class="value" id="sum-bf">—</div></div>
+      <div class="summary-cell"><div class="label">Wages + Loans</div><div class="value" id="sum-wages">—</div></div>
+      <div class="summary-cell amber"><div class="label">Expected Close</div><div class="value" id="sum-expected">{{ "{:,.0f}".format(doc.expected_close or 0) }}</div></div>
+      <div class="summary-cell red"><div class="label">Variance</div><div class="value" id="sum-variance">{{ "{:,.0f}".format(doc.variance or 0) }}</div></div>
+    </div>
+  </div>
+
+  <!-- VOUCHER REGISTER -->
+  <div class="section-card">
+    <div class="section-card-head">
+      Voucher Register
+      <span class="sub">{{ doc.vouchers|length }} rows · cash out by category</span>
+    </div>
+    <div class="code-legend">
+      <strong>Codes:</strong>
+      TG Transport-Goods <span class="sep">·</span>
+      TE Transport-Employee <span class="sep">·</span>
+      SE Spares/Engineering <span class="sep">·</span>
+      OA Office/Admin <span class="sep">·</span>
+      CM Commission <span class="sep">·</span>
+      OT Other
+      <span class="sep">|</span>
+      <span class="red-code">PC</span> = Petty Cash voucher slip received
+      <span class="sep">·</span>
+      <span class="red-code">ETR</span> = KRA ETR receipt received
+    </div>
+    <div class="section-card-body" style="overflow-x:auto">
+      <table class="grid-table">
+        <colgroup>
+          <col style="width:32px"><col style="width:90px"><col style="width:80px"><col style="width:160px">
+          <col style="width:75px"><col style="width:75px"><col style="width:75px"><col style="width:75px"><col style="width:75px"><col style="width:75px">
+          <col style="width:90px">
+          <col style="width:40px"><col style="width:40px">
+          <col><col style="width:80px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th rowspan="2">#</th><th rowspan="2">Date</th><th rowspan="2">Vch No</th><th rowspan="2">Recipient</th>
+            <th colspan="6" class="out">OUT (KES) — by category</th>
+            <th rowspan="2" class="in">IN (KES)</th>
+            <th rowspan="2">PC</th><th rowspan="2">ETR</th>
+            <th rowspan="2">Notes</th><th rowspan="2">Sign</th>
+          </tr>
+          <tr>
+            <th class="cat">TG</th><th class="cat">TE</th><th class="cat">SE</th>
+            <th class="cat">OA</th><th class="cat">CM</th><th class="cat">OT</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for v in doc.vouchers %}
+          <tr data-voucher-row="{{ v.name }}">
+            <td class="row-num">{{ v.row_idx }}</td>
+            <td><input type="date" name="txn_date" value="{{ v.txn_date or '' }}"></td>
+            <td><input type="text" name="voucher_no" value="{{ v.voucher_no or '' }}"></td>
+            <td><input type="text" name="recipient" value="{{ v.recipient or '' }}"></td>
+            <td class="cat-cell"><input type="number" step="0.01" name="amt_tg" value="{{ v.amt_tg or '' }}"></td>
+            <td class="cat-cell"><input type="number" step="0.01" name="amt_te" value="{{ v.amt_te or '' }}"></td>
+            <td class="cat-cell"><input type="number" step="0.01" name="amt_se" value="{{ v.amt_se or '' }}"></td>
+            <td class="cat-cell"><input type="number" step="0.01" name="amt_oa" value="{{ v.amt_oa or '' }}"></td>
+            <td class="cat-cell"><input type="number" step="0.01" name="amt_cm" value="{{ v.amt_cm or '' }}"></td>
+            <td class="cat-cell"><input type="number" step="0.01" name="amt_ot" value="{{ v.amt_ot or '' }}"></td>
+            <td class="in-cell"><input type="number" step="0.01" name="amt_in" value="{{ v.amt_in or '' }}"></td>
+            <td class="center"><input type="checkbox" name="pc_received" {% if v.pc_received %}checked{% endif %}></td>
+            <td class="center"><input type="checkbox" name="etr_received" {% if v.etr_received %}checked{% endif %}></td>
+            <td><input type="text" name="notes" value="{{ v.notes or '' }}"></td>
+            <td><input type="text" placeholder="signature"></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="4" style="text-align:right">WEEKLY TOTALS →</td>
+            <td class="cat-cell" data-foot-cat="TG">—</td>
+            <td class="cat-cell" data-foot-cat="TE">—</td>
+            <td class="cat-cell" data-foot-cat="SE">—</td>
+            <td class="cat-cell" data-foot-cat="OA">—</td>
+            <td class="cat-cell" data-foot-cat="CM">—</td>
+            <td class="cat-cell" data-foot-cat="OT">—</td>
+            <td class="in-cell">—</td>
+            <td colspan="4"></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- PARKING -->
+  <div class="section-card">
+    <div class="section-card-head">Vehicle Parking <span class="sub">2 entries per day per vehicle</span></div>
+    <div class="section-card-body" style="overflow-x:auto">
+      <table class="parking-table">
+        <thead>
+          <tr>
+            <th>Day</th><th>Date</th>
+            {% for v in vehicles %}<th>{{ v }}</th>{% endfor %}
+            <th>Daily Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for d in range(6) %}
+            {% set d_name = day_names[d] %}
+          <tr>
+            <td class="day-label" rowspan="2">{{ day_labels[d] }}</td>
+            <td class="date-label" rowspan="2">{{ frappe.format_value(week_dates[d], {"fieldtype": "Date"}) if week_dates[d] else "" }}</td>
+            {% for v in vehicles %}
+              {% set p = parking_grid.get(d_name, {}).get(v, {}).get(1) %}
+              <td><input type="number" step="0.01" {% if p %}data-parking-row="{{ p.name }}"{% endif %} value="{{ p.amount if p and p.amount else '' }}"></td>
+            {% endfor %}
+            <td data-day-grand="{{ d_name }}">—</td>
+          </tr>
+          <tr>
+            {% for v in vehicles %}
+              {% set p = parking_grid.get(d_name, {}).get(v, {}).get(2) %}
+              <td><input type="number" step="0.01" {% if p %}data-parking-row="{{ p.name }}"{% endif %} value="{{ p.amount if p and p.amount else '' }}"></td>
+            {% endfor %}
+            <td></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td colspan="2" style="text-align:right">Vehicle weekly total →</td>
+            {% for v in vehicles %}<td data-veh-total="{{ v }}">—</td>{% endfor %}
+            <td id="sum-parking-foot">—</td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+  </div>
+
+  <!-- MISC: Bike + Forklift -->
+  <div class="misc-grid">
+    <div class="section-card">
+      <div class="section-card-head">Bike Fuel</div>
+      <div class="section-card-body" style="overflow-x:auto">
+        <table class="grid-table">
+          <colgroup><col style="width:32px"><col style="width:110px"><col><col></colgroup>
+          <thead><tr><th>#</th><th>Date</th><th>Amount (KES)</th><th>Recipient Sign</th></tr></thead>
+          <tbody>
+            {% for m in bike_rows %}
+            <tr data-misc-row="{{ m.name }}">
+              <td class="row-num">{{ m.row_idx }}</td>
+              <td><input type="date" name="txn_date" value="{{ m.txn_date or '' }}"></td>
+              <td><input type="number" step="0.01" name="amount" value="{{ m.amount or '' }}"></td>
+              <td><input type="text" placeholder="signature"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="section-card">
+      <div class="section-card-head">Forklift</div>
+      <div class="section-card-body" style="overflow-x:auto">
+        <table class="grid-table">
+          <colgroup><col style="width:32px"><col style="width:110px"><col><col></colgroup>
+          <thead><tr><th>#</th><th>Date</th><th>Amount (KES)</th><th>Recipient Sign</th></tr></thead>
+          <tbody>
+            {% for m in forklift_rows %}
+            <tr data-misc-row="{{ m.name }}">
+              <td class="row-num">{{ m.row_idx }}</td>
+              <td><input type="date" name="txn_date" value="{{ m.txn_date or '' }}"></td>
+              <td><input type="number" step="0.01" name="amount" value="{{ m.amount or '' }}"></td>
+              <td><input type="text" placeholder="signature"></td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAGES & LOANS -->
+  <div class="section-card">
+    <div class="section-card-head">
+      Wages &amp; Loans Register
+      <span class="sub">Recipient signature on this sheet IS the supporting evidence</span>
+    </div>
+    <div class="section-card-body" style="overflow-x:auto">
+      <table class="grid-table">
+        <colgroup>
+          <col style="width:32px"><col style="width:100px"><col style="width:80px"><col style="width:160px">
+          <col style="width:80px"><col><col style="width:90px"><col style="width:80px"><col style="width:80px"><col style="width:50px">
+        </colgroup>
+        <thead>
+          <tr>
+            <th>#</th><th>Date</th><th>Type</th><th>Recipient</th>
+            <th>Staff ID</th><th>Reason</th>
+            <th>Amount (KES)</th><th>Recipient Sign</th><th>Authoriser Sign</th><th>PAYE</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for w in doc.wages_entries %}
+          <tr data-wages-row="{{ w.name }}">
+            <td class="row-num">{{ w.row_idx }}</td>
+            <td><input type="date" name="txn_date" value="{{ w.txn_date or '' }}"></td>
+            <td>
+              <select name="entry_type">
+                <option value="Wage" {% if w.entry_type=="Wage" %}selected{% endif %}>Wage</option>
+                <option value="Loan" {% if w.entry_type=="Loan" %}selected{% endif %}>Loan</option>
+              </select>
+            </td>
+            <td><input type="text" name="recipient" value="{{ w.recipient or '' }}"></td>
+            <td><input type="text" name="staff_id" value="{{ w.staff_id or '' }}"></td>
+            <td><input type="text" name="reason" value="{{ w.reason or '' }}"></td>
+            <td><input type="number" step="0.01" name="amount" value="{{ w.amount or '' }}"></td>
+            <td><input type="text" placeholder="signature"></td>
+            <td><input type="text" placeholder="signature"></td>
+            <td class="center"><input type="checkbox" name="paye" {% if w.paye %}checked{% endif %}></td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-top:24px;padding-bottom:48px">
+    <a href="/petty-cash/print?name={{ doc.name|urlencode }}&copies=1" target="_blank" class="btn btn-primary">Print Single</a>
+    <a href="/petty-cash/print?name={{ doc.name|urlencode }}&copies=3" target="_blank" class="btn btn-ghost">Print 3-Sheet</a>
+    <a href="/petty-cash/" class="btn btn-ghost">Back</a>
+  </div>
+</div>
+{% endblock %}

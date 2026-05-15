@@ -1,0 +1,19 @@
+include MANIFEST.in
+include requirements.txt
+include *.json
+include *.md
+include *.css
+include *.js
+include *.html
+recursive-include vcl_finance *.css
+recursive-include vcl_finance *.csv
+recursive-include vcl_finance *.html
+recursive-include vcl_finance *.ico
+recursive-include vcl_finance *.js
+recursive-include vcl_finance *.json
+recursive-include vcl_finance *.md
+recursive-include vcl_finance *.png
+recursive-include vcl_finance *.py
+recursive-include vcl_finance *.svg
+recursive-include vcl_finance *.txt
+recursive-exclude vcl_finance *.pyc

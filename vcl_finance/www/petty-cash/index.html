@@ -1,0 +1,66 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block page_content %}
+<div class="page">
+  <div class="page-head">
+    <div>
+      <h1>VCL Petty Cash</h1>
+      <div class="meta">{{ sheets|length }} weeks recorded</div>
+    </div>
+    <div class="page-actions">
+      <a class="btn btn-primary" href="/petty-cash/new">+ New Weekly Sheet</a>
+    </div>
+  </div>
+
+  {% if sheets %}
+  <table class="list-table">
+    <thead>
+      <tr>
+        <th>Wk</th>
+        <th>Week Ending</th>
+        <th>Custodian</th>
+        <th class="num">Opening</th>
+        <th class="num">Total Out</th>
+        <th class="num">Total In</th>
+        <th class="num">Expected Close</th>
+        <th class="num">Variance</th>
+        <th>Status</th>
+        <th class="actions"></th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in sheets %}
+      <tr>
+        <td><strong>{{ s.week_no or "" }}</strong></td>
+        <td>{{ frappe.format_value(s.week_ending, {"fieldtype": "Date"}) }}</td>
+        <td>{{ s.custodian_name or "" }}</td>
+        <td class="num">{{ "{:,.0f}".format(s.opening_balance or 0) }}</td>
+        <td class="num">{{ "{:,.0f}".format(s.total_out or 0) }}</td>
+        <td class="num">{{ "{:,.0f}".format(s.total_in or 0) }}</td>
+        <td class="num">{{ "{:,.0f}".format(s.expected_close or 0) }}</td>
+        <td class="num">
+          {% set v = s.variance or 0 %}
+          <span style="color: {% if v < 0 %}#C0392B{% elif v > 0 %}#1B7A45{% else %}#4A4F5C{% endif %}">
+            {{ "{:,.0f}".format(v) }}
+          </span>
+        </td>
+        <td><span class="status-pill status-{{ s.status }}">{{ s.status }}</span></td>
+        <td class="actions">
+          <a href="/petty-cash/sheet?name={{ s.name|urlencode }}">Edit</a>
+          <a href="/petty-cash/print?name={{ s.name|urlencode }}" target="_blank">Print</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <div class="empty-state">
+    <h2>No sheets yet</h2>
+    <p>Start your first weekly petty cash sheet — pick the week-ending Friday and your opening balance.</p>
+    <a class="btn btn-primary" href="/petty-cash/new" style="margin-top:16px;display:inline-flex">+ New Weekly Sheet</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

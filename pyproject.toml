@@ -1,0 +1,16 @@
+[build-system]
+requires = ["flit_core >=3.4,<4"]
+build-backend = "flit_core:buildapi"
+
+[project]
+name = "vcl_finance"
+authors = [
+    {name = "Vimit Converters Limited", email = "tanuj.haria@vimit.com"}
+]
+description = "VCL Finance — Frappe custom app for petty cash and other finance workflows"
+requires-python = ">=3.10"
+readme = "README.md"
+dynamic = ["version"]
+
+[tool.flit.module]
+name = "vcl_finance"

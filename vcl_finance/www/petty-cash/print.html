@@ -1,0 +1,504 @@
+{% set no_sidebar = 1 %}
+{% set no_header = 1 %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>VCL Petty Cash — Wk {{ doc.week_no }}</title>
+<style>
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; font-family: Arial, Helvetica, sans-serif; color: #000; background: #f0f0f0; }
+  .controls {
+    background: #fff; border-bottom: 3px solid #2B3990;
+    padding: 12px 24px; display: flex; gap: 12px; align-items: center;
+    position: sticky; top: 0; z-index: 100; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .controls h1 { margin: 0; font-size: 16px; color: #2B3990; flex: 1; }
+  .controls .meta { color: #666; font-size: 13px; }
+  .controls button { background: #2B3990; color: #fff; border: none; padding: 8px 18px; border-radius: 4px; cursor: pointer; font-size: 14px; font-weight: bold; }
+  .controls a { color: #2B3990; font-size: 13px; text-decoration: none; padding: 6px 12px; border: 1px solid #CBD2E0; border-radius: 4px; }
+  .sheet-wrapper { padding: 24px; display: flex; flex-direction: column; align-items: center; gap: 24px; }
+  .sheet { background: #fff; width: 297mm; min-height: 210mm; padding: 8mm; box-shadow: 0 2px 12px rgba(0,0,0,0.15); page-break-after: always; }
+  .sheet:last-child { page-break-after: auto; }
+
+  .title-bar { background: #2B3990; color: #fff; padding: 10px 16px; font-weight: bold; border: 2px solid #000; display: flex; justify-content: space-between; align-items: center; }
+  .title-bar .title-left { font-size: 16px; }
+  .title-bar .sep { color: #C8CFE8; margin: 0 8px; }
+  .title-bar .subtitle { font-size: 14px; }
+  .title-bar .copy-label { font-size: 13px; background: #fff; color: #2B3990; padding: 4px 10px; border-radius: 3px; font-weight: bold; }
+
+  table.header-info, table.code-legend, table.main-grid, table.parking-matrix,
+  table.bike-forklift, table.summary-cat, table.summary-vehicle, table.recon,
+  table.signoff, table.wages-grid {
+    width: 100%; border-collapse: collapse; margin-top: 6px; font-size: 10px;
+  }
+  td.label, th { background: #E8EAF0; font-weight: bold; padding: 4px 6px; border: 1px solid #000; text-align: center; font-size: 10px; }
+  td { padding: 4px 6px; border: 1px solid #000; vertical-align: middle; }
+  table.header-info td.value { height: 26px; background: #fff; }
+  .code-legend td { background: #F5F6FA; text-align: left; padding: 6px 10px; font-size: 10px; }
+  .code-legend .code { font-weight: bold; color: #2B3990; font-size: 11px; }
+  .code-legend .red-code { font-weight: bold; color: #C00000; font-size: 11px; }
+  .code-legend .sep { color: #BBB; margin: 0 8px; }
+  .main-grid th.cat-header { background: #2B3990; color: #fff; font-size: 11px; }
+  .main-grid th.in-header { background: #1B5E20; color: #fff; font-size: 10px; }
+  .main-grid th.out-spanner { background: #C00000; color: #fff; font-size: 11px; padding: 6px; }
+  .main-grid td.cat-cell { background: #EEF1FA; height: 24px; }
+  .main-grid td.in-cell { background: #E8F5E9; height: 24px; }
+  .main-grid tr.alt td:not(.cat-cell):not(.in-cell) { background: #F5F6FA; }
+  .main-grid td.row-num { text-align: center; color: #888; font-size: 9px; width: 20px; }
+  .main-grid tr.totals td { background: #E8EAF0; height: 22px; text-align: right; }
+  .main-grid tr.totals td.cat-cell { background: #EEF1FA; }
+  .main-grid tr.totals td.in-cell { background: #E8F5E9; }
+  table.parking-matrix .day-cell { font-weight: bold; background: #fff; }
+  table.parking-matrix tr.day-row td:not(.day-cell) { height: 30px; }
+  table.parking-matrix tr.alt-day td { background: #F5F6FA; }
+  table.parking-matrix tr.totals td { background: #E8EAF0; font-weight: bold; height: 24px; }
+  .bf-container { display: flex; gap: 12px; margin-top: 6px; }
+  .bf-block { flex: 1; }
+  .bf-block h3 { margin: 0 0 4px 0; color: #2B3990; font-size: 11px; }
+  table.bike-forklift td:not(.label) { height: 28px; }
+  table.bike-forklift tr.totals td { background: #E8EAF0; font-weight: bold; text-align: right; }
+  .section-bar { background: #2B3990; color: #fff; font-weight: bold; padding: 6px 12px; font-size: 12px; border: 1px solid #000; margin-top: 10px; }
+  .summary-cat th.summary-header, .summary-vehicle th.summary-header { background: #2B3990; color: #fff; }
+  .summary-cat td.label-cell, .summary-vehicle td.label-cell { background: #F5F6FA; font-weight: bold; text-align: left; }
+  .summary-cat td.percent-row { background: #E8EAF0; font-weight: bold; }
+  .summary-cat td.total-cell, .summary-vehicle td.total-cell { background: #FFF8E1; font-weight: bold; }
+  .recon-container { display: flex; gap: 16px; margin-top: 10px; }
+  .recon-block { flex: 1; }
+  .recon-block h3 { margin: 0 0 4px 0; color: #2B3990; font-size: 11px; }
+  table.recon td.label { text-align: left; background: #F5F6FA; }
+  table.recon td.value { background: #fff; height: 22px; text-align: right; }
+  table.recon tr.bold td { background: #FFF8E1; font-weight: bold; }
+  table.signoff td.label { background: #E8EAF0; height: 18px; font-size: 10px; }
+  table.signoff td.empty { height: 50px; background: #fff; }
+  td.right { text-align: right; }
+
+  @media print {
+    html, body { background: #fff; margin: 0 !important; padding: 0 !important; width: 100%; }
+    .controls { display: none !important; }
+    .sheet-wrapper { padding: 0 !important; gap: 0 !important; align-items: stretch !important; width:100% !important; margin: 0 !important; }
+    .sheet { box-shadow: none !important; width: 100% !important; max-width: none !important; min-width: 0 !important; min-height: 0; padding: 0 !important; margin: 0 !important; }
+    .sheet table { width: 100% !important; table-layout: fixed; }
+    .sheet[data-page="1"] table.main-grid tbody td { height: 30px; }
+    @page { size: A4 landscape; margin: 6mm; }
+  }
+
+  {% macro fmt(n) -%}
+    {%- if n %}{{ "{:,.0f}".format(n) }}{%- endif -%}
+  {%- endmacro %}
+</style>
+</head>
+<body>
+
+<div class="controls">
+  <h1>VCL Weekly Petty Cash — Week {{ doc.week_no }}</h1>
+  <span class="meta">{{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }} · {{ doc.custodian_name }} · {{ copies }} continuation sheet{% if copies > 1 %}s{% endif %}</span>
+  <a href="/petty-cash/sheet?name={{ doc.name|urlencode }}">← Back to editor</a>
+  <button onclick="window.print()">Print Now</button>
+</div>
+
+<div class="sheet-wrapper">
+
+  {# Voucher continuation sheets #}
+  {% for chunk in voucher_chunks %}
+  <div class="sheet" data-page="1">
+    <div class="title-bar">
+      <div class="title-left">VIMIT CONVERTERS LIMITED <span class="sep">|</span> <span class="subtitle">WEEKLY PETTY CASH — VOUCHER REGISTER</span></div>
+      {% if copies > 1 %}<div class="copy-label">Sheet {{ loop.index }} of {{ copies }}</div>{% endif %}
+    </div>
+
+    <table class="header-info">
+      <colgroup><col style="width:10%"><col style="width:18%"><col style="width:30%"><col style="width:20%"><col style="width:22%"></colgroup>
+      <tr><th>WEEK NO</th><th>WEEK ENDING</th><th>CUSTODIAN</th><th>OPENING BALANCE (KES)</th><th>CLOSING BALANCE (KES)</th></tr>
+      <tr>
+        <td class="value">{{ doc.week_no }}</td>
+        <td class="value">{{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }}</td>
+        <td class="value">{{ doc.custodian_name }}</td>
+        <td class="value">{{ "{:,.0f}".format(doc.opening_balance or 0) }}</td>
+        <td class="value">{% if loop.last %}{{ "{:,.0f}".format(doc.expected_close or 0) }}{% endif %}</td>
+      </tr>
+    </table>
+
+    <table class="code-legend">
+      <tr><td>
+        <strong style="color:#555">CODES:</strong>
+        <span class="code">TG</span> Transport-Goods <span class="sep">·</span>
+        <span class="code">TE</span> Transport-Employee <span class="sep">·</span>
+        <span class="code">SE</span> Spares/Engineering <span class="sep">·</span>
+        <span class="code">OA</span> Office/Admin <span class="sep">·</span>
+        <span class="code">CM</span> Commission <span class="sep">·</span>
+        <span class="code">OT</span> Other <span class="sep">|</span>
+        <span class="red-code">PC</span> = Petty Cash voucher slip received <span class="sep">·</span>
+        <span class="red-code">ETR</span> = KRA ETR receipt received
+      </td></tr>
+    </table>
+
+    <table class="main-grid">
+      <colgroup>
+        <col style="width:2.2%"><col style="width:6%"><col style="width:7%"><col style="width:12%">
+        <col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%">
+        <col style="width:7.7%"><col style="width:3.2%"><col style="width:3.2%"><col style="width:18.5%"><col style="width:11.4%">
+      </colgroup>
+      <thead>
+        <tr>
+          <th rowspan="2">#</th><th rowspan="2">DATE</th><th rowspan="2">VOUCHER NO</th><th rowspan="2">RECIPIENT</th>
+          <th colspan="6" class="out-spanner">OUT (KES) — by category code</th>
+          <th rowspan="2" class="in-header">IN (KES)</th>
+          <th rowspan="2">PC ✓</th><th rowspan="2">ETR ✓</th>
+          <th rowspan="2">NOTES</th><th rowspan="2">SIGN</th>
+        </tr>
+        <tr>
+          <th class="cat-header">TG</th><th class="cat-header">TE</th><th class="cat-header">SE</th>
+          <th class="cat-header">OA</th><th class="cat-header">CM</th><th class="cat-header">OT</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for v in chunk %}
+        <tr {% if loop.index is divisibleby 2 %}class="alt"{% endif %}>
+          {% if v %}
+          <td class="row-num">{{ v.row_idx }}</td>
+          <td>{{ frappe.format_value(v.txn_date, {"fieldtype": "Date"}) if v.txn_date else "" }}</td>
+          <td>{{ v.voucher_no or "" }}</td>
+          <td>{{ v.recipient or "" }}</td>
+          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_tg) if v.amt_tg else "" }}</td>
+          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_te) if v.amt_te else "" }}</td>
+          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_se) if v.amt_se else "" }}</td>
+          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_oa) if v.amt_oa else "" }}</td>
+          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_cm) if v.amt_cm else "" }}</td>
+          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_ot) if v.amt_ot else "" }}</td>
+          <td class="in-cell right">{{ "{:,.0f}".format(v.amt_in) if v.amt_in else "" }}</td>
+          <td style="text-align:center">{% if v.pc_received %}✓{% endif %}</td>
+          <td style="text-align:center">{% if v.etr_received %}✓{% endif %}</td>
+          <td>{{ v.notes or "" }}</td>
+          <td></td>
+          {% else %}
+          <td class="row-num"></td>
+          <td></td><td></td><td></td>
+          <td class="cat-cell"></td><td class="cat-cell"></td><td class="cat-cell"></td>
+          <td class="cat-cell"></td><td class="cat-cell"></td><td class="cat-cell"></td>
+          <td class="in-cell"></td>
+          <td></td><td></td><td></td><td></td>
+          {% endif %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      {% if loop.last %}
+      <tfoot>
+        <tr class="totals">
+          <td colspan="4" style="text-align:right;background:#E8EAF0">WEEKLY TOTALS →</td>
+          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.TG) if summary.cat_out.TG else "" }}</td>
+          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.TE) if summary.cat_out.TE else "" }}</td>
+          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.SE) if summary.cat_out.SE else "" }}</td>
+          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.OA) if summary.cat_out.OA else "" }}</td>
+          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.CM) if summary.cat_out.CM else "" }}</td>
+          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.OT) if summary.cat_out.OT else "" }}</td>
+          <td class="in-cell">{{ "{:,.0f}".format(summary.cat_in) if summary.cat_in else "" }}</td>
+          <td colspan="4"></td>
+        </tr>
+      </tfoot>
+      {% endif %}
+    </table>
+  </div>
+  {% endfor %}
+
+  {# VEHICLE PAGE #}
+  <div class="sheet" data-page="2">
+    <div class="title-bar">
+      <div class="title-left">VIMIT CONVERTERS LIMITED <span class="sep">|</span> <span class="subtitle">WEEKLY PETTY CASH — VEHICLE EXPENSES</span></div>
+    </div>
+
+    <table class="header-info">
+      <colgroup><col style="width:12%"><col style="width:22%"><col style="width:36%"><col style="width:30%"></colgroup>
+      <tr><th>WEEK NO</th><th>WEEK ENDING</th><th>CUSTODIAN</th><th>OPENING BALANCE (KES)</th></tr>
+      <tr>
+        <td class="value">{{ doc.week_no }}</td>
+        <td class="value">{{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }}</td>
+        <td class="value">{{ doc.custodian_name }}</td>
+        <td class="value">{{ "{:,.0f}".format(doc.opening_balance or 0) }}</td>
+      </tr>
+    </table>
+
+    <div class="section-bar">SECTION A — VEHICLE PARKING (KES) — by car, 2 entries per day</div>
+    <table class="parking-matrix">
+      <colgroup><col style="width:9%"><col style="width:10%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:13%"><col style="width:16%"></colgroup>
+      <thead>
+        <tr>
+          <th>DAY</th><th>DATE</th>
+          {% for v in vehicles %}<th>{{ v }}</th>{% endfor %}
+          <th>DAILY TOTAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for d in range(6) %}
+          {% set d_name = day_names[d] %}
+        <tr class="day-row {% if d is divisibleby 2 %}{% else %}alt-day{% endif %}">
+          <td class="day-cell" rowspan="2">{{ day_labels[d] }}</td>
+          <td rowspan="2">{{ frappe.format_value(week_dates[d], {"fieldtype": "Date"}) if week_dates[d] else "" }}</td>
+          {% for v in vehicles %}
+            {% set p = parking_grid.get(d_name, {}).get(v, {}).get(1) %}
+            <td class="right">{{ "{:,.0f}".format(p.amount) if p and p.amount else "" }}</td>
+          {% endfor %}
+          <td class="right" rowspan="2">{{ "{:,.0f}".format(summary.parking_by_day[d_name]) if summary.parking_by_day.get(d_name) else "" }}</td>
+        </tr>
+        <tr class="day-row {% if d is divisibleby 2 %}{% else %}alt-day{% endif %}">
+          {% for v in vehicles %}
+            {% set p = parking_grid.get(d_name, {}).get(v, {}).get(2) %}
+            <td class="right">{{ "{:,.0f}".format(p.amount) if p and p.amount else "" }}</td>
+          {% endfor %}
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr class="totals">
+          <td></td><td style="text-align:right">WEEKLY TOTAL</td>
+          {% for v in vehicles %}
+            <td class="right">{{ "{:,.0f}".format(summary.parking_by_vehicle[v]) if summary.parking_by_vehicle.get(v) else "" }}</td>
+          {% endfor %}
+          <td class="right">{{ "{:,.0f}".format(summary.parking_total) if summary.parking_total else "" }}</td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <div class="section-bar">SECTION B — BIKE FUEL & FORKLIFT (KES)</div>
+    <div class="bf-container">
+      <div class="bf-block">
+        <h3>BIKE FUEL</h3>
+        <table class="bike-forklift">
+          <colgroup><col style="width:18%"><col style="width:22%"><col style="width:30%"><col style="width:30%"></colgroup>
+          <thead><tr><th>#</th><th>DATE</th><th>AMOUNT (KES)</th><th>RECIPIENT SIGN</th></tr></thead>
+          <tbody>
+            {% for m in bike_rows %}
+            <tr>
+              <td style="text-align:center">{{ m.row_idx }}</td>
+              <td>{{ frappe.format_value(m.txn_date, {"fieldtype": "Date"}) if m.txn_date else "" }}</td>
+              <td class="right">{{ "{:,.0f}".format(m.amount) if m.amount else "" }}</td>
+              <td></td>
+            </tr>
+            {% endfor %}
+            <tr class="totals"><td></td><td style="text-align:right">WEEKLY TOTAL</td><td class="right">{{ "{:,.0f}".format(summary.bike_total) if summary.bike_total else "" }}</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="bf-block">
+        <h3>FORKLIFT</h3>
+        <table class="bike-forklift">
+          <colgroup><col style="width:18%"><col style="width:22%"><col style="width:30%"><col style="width:30%"></colgroup>
+          <thead><tr><th>#</th><th>DATE</th><th>AMOUNT (KES)</th><th>RECIPIENT SIGN</th></tr></thead>
+          <tbody>
+            {% for m in forklift_rows %}
+            <tr>
+              <td style="text-align:center">{{ m.row_idx }}</td>
+              <td>{{ frappe.format_value(m.txn_date, {"fieldtype": "Date"}) if m.txn_date else "" }}</td>
+              <td class="right">{{ "{:,.0f}".format(m.amount) if m.amount else "" }}</td>
+              <td></td>
+            </tr>
+            {% endfor %}
+            <tr class="totals"><td></td><td style="text-align:right">WEEKLY TOTAL</td><td class="right">{{ "{:,.0f}".format(summary.forklift_total) if summary.forklift_total else "" }}</td><td></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  {# WAGES & LOANS PAGE #}
+  <div class="sheet" data-page="3">
+    <div class="title-bar">
+      <div class="title-left">VIMIT CONVERTERS LIMITED <span class="sep">|</span> <span class="subtitle">WEEKLY PETTY CASH — WAGES & LOANS REGISTER</span></div>
+    </div>
+
+    <table class="header-info">
+      <colgroup><col style="width:12%"><col style="width:18%"><col style="width:18%"><col style="width:30%"><col style="width:22%"></colgroup>
+      <tr><th>WEEK NO</th><th>WEEK ENDING</th><th>PAY DATE</th><th>CUSTODIAN</th><th>TOTAL CASH OUT (KES)</th></tr>
+      <tr>
+        <td class="value">{{ doc.week_no }}</td>
+        <td class="value">{{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }}</td>
+        <td class="value"></td>
+        <td class="value">{{ doc.custodian_name }}</td>
+        <td class="value">{{ "{:,.0f}".format((summary.wages_total or 0) + (summary.loans_total or 0)) }}</td>
+      </tr>
+    </table>
+
+    <table class="wages-grid" style="margin-top:6px">
+      <colgroup><col style="width:3%"><col style="width:8%"><col style="width:7%"><col style="width:18%"><col style="width:9%"><col style="width:23%"><col style="width:10%"><col style="width:10%"><col style="width:8%"><col style="width:4%"></colgroup>
+      <thead>
+        <tr>
+          <th>#</th><th>DATE</th><th>TYPE</th><th>RECIPIENT</th><th>ID / STAFF NO</th>
+          <th>REASON / REFERENCE</th><th>AMOUNT (KES)</th><th>RECIPIENT SIGN</th><th>AUTHORISER SIGN</th><th>PAYE?</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for w in doc.wages_entries %}
+        <tr>
+          <td style="text-align:center">{{ w.row_idx }}</td>
+          <td>{{ frappe.format_value(w.txn_date, {"fieldtype": "Date"}) if w.txn_date else "" }}</td>
+          <td style="text-align:center">{{ w.entry_type[:1] if w.entry_type else "" }}</td>
+          <td>{{ w.recipient or "" }}</td>
+          <td>{{ w.staff_id or "" }}</td>
+          <td>{{ w.reason or "" }}</td>
+          <td class="right">{{ "{:,.0f}".format(w.amount) if w.amount else "" }}</td>
+          <td></td><td></td>
+          <td style="text-align:center">{% if w.paye %}Y{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="6" style="background:#E8EAF0;text-align:right;font-weight:bold">WEEKLY TOTAL →</td>
+          <td style="background:#FFF8E1;font-weight:bold;text-align:right">{{ "{:,.0f}".format((summary.wages_total or 0) + (summary.loans_total or 0)) }}</td>
+          <td style="background:#E8EAF0"></td><td style="background:#E8EAF0"></td><td style="background:#E8EAF0"></td>
+        </tr>
+      </tfoot>
+    </table>
+
+    <table class="header-info" style="margin-top:10px">
+      <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
+      <tr>
+        <th>TOTAL WAGES PAID (KES)</th>
+        <th>TOTAL LOANS ISSUED (KES)</th>
+        <th>LOANS RECOVERED THIS WEEK</th>
+        <th>GRAND TOTAL CASH OUT</th>
+      </tr>
+      <tr>
+        <td class="value right" style="height:36px">{{ "{:,.0f}".format(summary.wages_total) if summary.wages_total else "" }}</td>
+        <td class="value right" style="height:36px">{{ "{:,.0f}".format(summary.loans_total) if summary.loans_total else "" }}</td>
+        <td class="value" style="height:36px"></td>
+        <td class="value right" style="height:36px;background:#FFF8E1;font-weight:bold">{{ "{:,.0f}".format((summary.wages_total or 0) + (summary.loans_total or 0)) }}</td>
+      </tr>
+    </table>
+
+    <p style="margin-top:8px;font-size:10px;color:#333">
+      <strong style="color:#C00000">NOTE:</strong>
+      All wages and loans paid in cash are recorded here. Recipient signs against their row as proof of receipt.
+      No petty cash voucher slip or ETR receipt is required for these entries — the recipient signature on this sheet
+      IS the supporting evidence. Tick PAYE for any payment requiring statutory deduction.
+    </p>
+
+    <table class="signoff" style="margin-top:6px">
+      <colgroup><col style="width:24%"><col style="width:9%"><col style="width:24%"><col style="width:9%"><col style="width:24%"><col style="width:10%"></colgroup>
+      <thead>
+        <tr><th>CUSTODIAN — PREPARED BY</th><th>DATE</th><th>FINANCE MANAGER — REVIEWED BY</th><th>DATE</th><th>CFO — APPROVED BY</th><th>DATE</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="empty" style="height:60px"></td><td class="empty"></td><td class="empty"></td><td class="empty"></td><td class="empty"></td><td class="empty"></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  {# RECON & SUMMARY PAGE #}
+  <div class="sheet" data-page="4">
+    <div class="title-bar">
+      <div class="title-left">VIMIT CONVERTERS LIMITED <span class="sep">|</span> <span class="subtitle">WEEKLY PETTY CASH — RECONCILIATION & SUMMARY</span></div>
+    </div>
+
+    <table class="header-info">
+      <colgroup><col style="width:12%"><col style="width:22%"><col style="width:36%"><col style="width:30%"></colgroup>
+      <tr><th>WEEK NO</th><th>WEEK ENDING</th><th>CUSTODIAN</th><th>OPENING BALANCE (KES)</th></tr>
+      <tr>
+        <td class="value">{{ doc.week_no }}</td>
+        <td class="value">{{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }}</td>
+        <td class="value">{{ doc.custodian_name }}</td>
+        <td class="value">{{ "{:,.0f}".format(doc.opening_balance or 0) }}</td>
+      </tr>
+    </table>
+
+    <div class="section-bar">CATEGORY BREAKDOWN (from Voucher Register)</div>
+    <table class="summary-cat">
+      <colgroup><col style="width:22%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:9%"><col style="width:24%"></colgroup>
+      <thead>
+        <tr>
+          <th class="label-cell" style="text-align:left">VOUCHER REGISTER — BY CATEGORY</th>
+          <th class="summary-header">TG</th><th class="summary-header">TE</th><th class="summary-header">SE</th>
+          <th class="summary-header">OA</th><th class="summary-header">CM</th><th class="summary-header">OT</th>
+          <th class="summary-header">TOTAL</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="label-cell">Cash OUT (KES)</td>
+          {% for code in ["TG","TE","SE","OA","CM","OT"] %}
+            <td class="right">{{ "{:,.0f}".format(summary.cat_out[code]) if summary.cat_out[code] else "" }}</td>
+          {% endfor %}
+          <td class="total-cell right">{{ "{:,.0f}".format(summary.voucher_total_out) if summary.voucher_total_out else "" }}</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Cash IN (KES) — refunds</td>
+          <td colspan="6" style="text-align:right;background:#F5F6FA"></td>
+          <td class="total-cell right">{{ "{:,.0f}".format(summary.cat_in) if summary.cat_in else "" }}</td>
+        </tr>
+        <tr>
+          <td class="label-cell">Vouchers / Receipts</td>
+          <td colspan="6" style="text-align:right">PC: <strong>{{ summary.pc_count }}</strong> · ETR: <strong>{{ summary.etr_count }}</strong> · rows used: <strong>{{ summary.voucher_count }}</strong></td>
+          <td></td>
+        </tr>
+        <tr class="percent-row">
+          <td class="label-cell">% of Voucher Spend</td>
+          {% for code in ["TG","TE","SE","OA","CM","OT"] %}
+            <td class="percent-row">
+              {% if summary.voucher_total_out and summary.voucher_total_out > 0 %}{{ ((summary.cat_out[code] / summary.voucher_total_out) * 100)|round(0)|int }}%{% else %}—{% endif %}
+            </td>
+          {% endfor %}
+          <td class="percent-row" style="text-align:center;color:#2B3990">100%</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-bar">VEHICLE BREAKDOWN (from Vehicle Sheet)</div>
+    <table class="summary-vehicle">
+      <colgroup><col style="width:22%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:11%"><col style="width:12%"></colgroup>
+      <thead>
+        <tr>
+          <th class="label-cell" style="text-align:left">VEHICLE SHEET — BY VEHICLE</th>
+          {% for v in vehicles %}<th class="summary-header">{{ v }}</th>{% endfor %}
+          <th class="summary-header">BIKE</th>
+          <th class="summary-header">FORKLIFT</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td class="label-cell">Weekly Spend (KES)</td>
+          {% for v in vehicles %}<td class="right">{{ "{:,.0f}".format(summary.parking_by_vehicle[v]) if summary.parking_by_vehicle.get(v) else "" }}</td>{% endfor %}
+          <td class="right">{{ "{:,.0f}".format(summary.bike_total) if summary.bike_total else "" }}</td>
+          <td class="total-cell right">{{ "{:,.0f}".format(summary.forklift_total) if summary.forklift_total else "" }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-bar">END OF WEEK RECONCILIATION</div>
+    <div class="recon-container">
+      <div class="recon-block">
+        <h3>CASH MOVEMENT</h3>
+        <table class="recon">
+          <colgroup><col style="width:65%"><col style="width:35%"></colgroup>
+          <tr><td class="label">A. Opening Balance (start of week)</td><td class="value">{{ "{:,.0f}".format(doc.opening_balance or 0) }}</td></tr>
+          <tr><td class="label">B. Total Cash OUT (Voucher + Vehicle + Wages)</td><td class="value">{{ "{:,.0f}".format(summary.total_out or 0) }}</td></tr>
+          <tr><td class="label">C. Total Cash IN (refunds)</td><td class="value">{{ "{:,.0f}".format(summary.cat_in or 0) }}</td></tr>
+          <tr class="bold"><td class="label" style="background:#FFF8E1">D. EXPECTED CLOSING = A − B + C</td><td class="value">{{ "{:,.0f}".format(summary.expected_close or 0) }}</td></tr>
+        </table>
+      </div>
+      <div class="recon-block">
+        <h3>PHYSICAL RECONCILIATION</h3>
+        <table class="recon">
+          <colgroup><col style="width:65%"><col style="width:35%"></colgroup>
+          <tr><td class="label">E. Physical Cash Count (end of week)</td><td class="value">{{ "{:,.0f}".format(doc.cash_count_end or 0) }}</td></tr>
+          <tr><td class="label">F. Sum of Open Vouchers (cash out)</td><td class="value"></td></tr>
+          <tr class="bold"><td class="label" style="background:#FFF8E1">G. AUTHORISED FLOAT</td><td class="value">{{ "{:,.0f}".format(doc.authorised_float or 0) }}</td></tr>
+          <tr class="bold"><td class="label" style="background:#FFF8E1">H. VARIANCE = E − D</td><td class="value">{{ "{:,.0f}".format(summary.variance or 0) }}</td></tr>
+        </table>
+      </div>
+    </div>
+
+    <table class="signoff" style="margin-top:14px">
+      <colgroup><col style="width:30%"><col style="width:12%"><col style="width:30%"><col style="width:12%"><col style="width:16%"></colgroup>
+      <thead>
+        <tr><th>CUSTODIAN NAME &amp; SIGN</th><th>DATE</th><th>FINANCE MANAGER NAME &amp; SIGN</th><th>DATE</th><th>VARIANCE EXPLANATION</th></tr>
+      </thead>
+      <tbody>
+        <tr><td class="empty"></td><td class="empty"></td><td class="empty"></td><td class="empty"></td><td class="empty"></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+</div>
+
+</body>
+</html>

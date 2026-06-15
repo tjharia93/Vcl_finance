@@ -1,0 +1,49 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "hash",
+ "creation": "2026-06-15 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "sync_key",
+  "canonical_customer",
+  "entry_ref",
+  "entry_date",
+  "entry_type",
+  "side",
+  "column_break_amt",
+  "original_amount",
+  "outstanding_amount",
+  "source",
+  "days_outstanding",
+  "updated_at"
+ ],
+ "fields": [
+  {"fieldname": "sync_key", "fieldtype": "Data", "label": "Sync Key", "unique": 1, "reqd": 1, "description": "canonical|entry_ref|side — stable join key to vcl_data"},
+  {"fieldname": "canonical_customer", "fieldtype": "Link", "options": "AR Customer Recon", "label": "Customer", "reqd": 1, "in_list_view": 1},
+  {"fieldname": "entry_ref", "fieldtype": "Data", "label": "Reference", "in_list_view": 1},
+  {"fieldname": "entry_date", "fieldtype": "Date", "label": "Date", "in_list_view": 1},
+  {"fieldname": "entry_type", "fieldtype": "Select", "label": "Type", "options": "invoice\npayment\ncredit\nopening\njournal"},
+  {"fieldname": "side", "fieldtype": "Select", "label": "Side", "options": "Debit\nCredit", "in_list_view": 1},
+  {"fieldname": "column_break_amt", "fieldtype": "Column Break"},
+  {"fieldname": "original_amount", "fieldtype": "Currency", "label": "Original Amount"},
+  {"fieldname": "outstanding_amount", "fieldtype": "Currency", "label": "Outstanding", "in_list_view": 1},
+  {"fieldname": "source", "fieldtype": "Select", "label": "Source", "options": "hist\nqbo"},
+  {"fieldname": "days_outstanding", "fieldtype": "Int", "label": "Days Outstanding"},
+  {"fieldname": "updated_at", "fieldtype": "Datetime", "label": "Updated At"}
+ ],
+ "links": [],
+ "modified": "2026-06-15 00:00:00",
+ "modified_by": "Administrator",
+ "module": "AR Reconciliation",
+ "name": "AR Open Entry",
+ "owner": "Administrator",
+ "permissions": [
+  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1},
+  {"role": "Accounts Manager", "read": 1, "write": 1, "create": 1, "report": 1, "export": 1},
+  {"role": "Accounts User", "read": 1, "report": 1}
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC"
+}

@@ -7,8 +7,10 @@ from frappe.model.document import Document
 
 VEHICLES = ["KAP 466", "KAY 635", "KCB 430", "KBQ 788", "KBT 972"]
 DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+CATEGORY_CODES = ["TG", "TE", "SE", "OA", "FD", "GP", "OT"]
 VOUCHER_ROWS = 18
 WAGES_ROWS = 18
+LOAN_ROWS = 8
 BIKE_ROWS = 6
 FORKLIFT_ROWS = 4
 
@@ -22,6 +24,7 @@ class PettyCashSheet(Document):
 
     def validate(self):
         self.validate_week_ending()
+        self.validate_unique_float()
         self.derive_week_no()
         self.ensure_grid()
         self.compute_totals()
@@ -48,6 +51,31 @@ class PettyCashSheet(Document):
             frappe.throw(_("Week Ending must be a Friday. Got {0} ({1}).").format(
                 we.isoformat(), DAY_NAMES[we.weekday() if we.weekday() < 6 else 5]
             ))
+
+    def validate_unique_float(self):
+        """Composite uniqueness on (week_ending, float).
+
+        Frappe's per-field ``unique`` flag can't express a composite key, so we
+        enforce it here: reject a second non-cancelled sheet with the same Friday
+        and float. Cash and Hauz-Pay on the same Friday are allowed.
+        """
+        if not self.week_ending or not self.float:
+            return
+        we = _as_date(self.week_ending)
+        clash = frappe.db.get_value(
+            "Petty Cash Sheet",
+            {
+                "week_ending": we,
+                "float": self.float,
+                "name": ("!=", self.name or ""),
+                "docstatus": ("<", 2),
+            },
+            "name",
+        )
+        if clash:
+            frappe.throw(_(
+                "A Petty Cash Sheet for {0} on the {1} float already exists ({2})."
+            ).format(we.isoformat(), self.float, clash))
 
     def derive_week_no(self):
         if self.week_ending:
@@ -101,29 +129,37 @@ class PettyCashSheet(Document):
             if i not in existing_wages:
                 self.append("wages_entries", {"row_idx": i, "entry_type": "Wage"})
 
+        # Loans — 8 rows
+        existing_loans = {(l.row_idx or 0) for l in self.loan_entries}
+        for i in range(1, LOAN_ROWS + 1):
+            if i not in existing_loans:
+                self.append("loan_entries", {"row_idx": i})
+
     # ------------------------------------------------------------------
     # Totals — re-computed on every save so the form, list, and print
     # views always see the same numbers.
     # ------------------------------------------------------------------
 
     def compute_totals(self):
-        cat = {"TG": 0.0, "TE": 0.0, "SE": 0.0, "OA": 0.0, "CM": 0.0, "OT": 0.0}
+        cat = {c: 0.0 for c in CATEGORY_CODES}
+        voucher_out = 0.0
         total_in = 0.0
         for v in self.vouchers:
-            cat["TG"] += v.amt_tg or 0
-            cat["TE"] += v.amt_te or 0
-            cat["SE"] += v.amt_se or 0
-            cat["OA"] += v.amt_oa or 0
-            cat["CM"] += v.amt_cm or 0
-            cat["OT"] += v.amt_ot or 0
-            total_in += v.amt_in or 0
-        voucher_out = sum(cat.values())
+            amt = v.amount or 0
+            if v.cash_in:
+                total_in += amt
+            else:
+                voucher_out += amt
+                if v.category in cat:
+                    cat[v.category] += amt
 
         parking_out = sum((p.amount or 0) for p in self.parking_entries)
         misc_out = sum((m.amount or 0) for m in self.misc_entries)
         wages_out = sum((w.amount or 0) for w in self.wages_entries)
+        # Only the cash actually issued leaves the float.
+        loans_out = sum((l.amount_issued or 0) for l in self.loan_entries)
 
-        self.total_out = voucher_out + parking_out + misc_out + wages_out
+        self.total_out = voucher_out + parking_out + misc_out + wages_out + loans_out
         self.total_in = total_in
         self.expected_close = (self.opening_balance or 0) - self.total_out + self.total_in
         self.variance = (self.cash_count_end or 0) - self.expected_close
@@ -156,20 +192,18 @@ def summary(name):
     Re-computes server-side rather than trusting the client. Safe to call repeatedly.
     """
     doc = frappe.get_doc("Petty Cash Sheet", name)
-    cat = {"TG": 0.0, "TE": 0.0, "SE": 0.0, "OA": 0.0, "CM": 0.0, "OT": 0.0}
+    cat = {c: 0.0 for c in CATEGORY_CODES}
     cat_in = 0.0
     voucher_count = 0
     pc_count = 0
     etr_count = 0
     for v in doc.vouchers:
-        cat["TG"] += v.amt_tg or 0
-        cat["TE"] += v.amt_te or 0
-        cat["SE"] += v.amt_se or 0
-        cat["OA"] += v.amt_oa or 0
-        cat["CM"] += v.amt_cm or 0
-        cat["OT"] += v.amt_ot or 0
-        cat_in += v.amt_in or 0
-        if v.voucher_no or v.recipient or any([v.amt_tg, v.amt_te, v.amt_se, v.amt_oa, v.amt_cm, v.amt_ot, v.amt_in]):
+        amt = v.amount or 0
+        if v.cash_in:
+            cat_in += amt
+        elif v.category in cat:
+            cat[v.category] += amt
+        if v.voucher_no or v.recipient or amt:
             voucher_count += 1
         if v.pc_received:
             pc_count += 1
@@ -184,8 +218,8 @@ def summary(name):
 
     bike_total = sum((m.amount or 0) for m in doc.misc_entries if m.kind == "Bike Fuel")
     forklift_total = sum((m.amount or 0) for m in doc.misc_entries if m.kind == "Forklift")
-    wages_total = sum((w.amount or 0) for w in doc.wages_entries if w.entry_type == "Wage")
-    loans_total = sum((w.amount or 0) for w in doc.wages_entries if w.entry_type == "Loan")
+    wages_total = sum((w.amount or 0) for w in doc.wages_entries)
+    loans_total = sum((l.amount_issued or 0) for l in doc.loan_entries)
 
     return {
         "cat_out": cat,
@@ -211,18 +245,22 @@ def summary(name):
 
 
 @frappe.whitelist()
-def create_for_week(week_ending, custodian_name="Shiro", opening_balance=0, authorised_float=50000):
-    """Convenience endpoint: create a new sheet for the given Friday, or return existing.
+def create_for_week(week_ending, custodian_name="Shiro", opening_balance=0, authorised_float=50000, float_name="Cash"):
+    """Convenience endpoint: create a new sheet for the given Friday + float, or return existing.
 
     Used by the Website Page "New Sheet" form so the custodian doesn't have to
-    pick a Naming Series manually.
+    pick a Naming Series manually. Idempotent on the (week_ending, float) key.
     """
     we = _as_date(week_ending)
-    existing = frappe.db.get_value("Petty Cash Sheet", {"week_ending": we}, "name")
+    float_name = float_name or "Cash"
+    existing = frappe.db.get_value(
+        "Petty Cash Sheet", {"week_ending": we, "float": float_name}, "name"
+    )
     if existing:
         return existing
     doc = frappe.new_doc("Petty Cash Sheet")
     doc.week_ending = we
+    doc.float = float_name
     doc.custodian_name = custodian_name or "Shiro"
     doc.opening_balance = float(opening_balance or 0)
     doc.authorised_float = float(authorised_float or 50000)

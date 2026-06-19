@@ -20,6 +20,7 @@
       <tr>
         <th>Wk</th>
         <th>Week Ending</th>
+        <th>Float</th>
         <th>Custodian</th>
         <th class="num">Opening</th>
         <th class="num">Total Out</th>
@@ -35,6 +36,7 @@
       <tr>
         <td><strong>{{ s.week_no or "" }}</strong></td>
         <td>{{ frappe.format_value(s.week_ending, {"fieldtype": "Date"}) }}</td>
+        <td>{{ s.float or "Cash" }}</td>
         <td>{{ s.custodian_name or "" }}</td>
         <td class="num">{{ "{:,.0f}".format(s.opening_balance or 0) }}</td>
         <td class="num">{{ "{:,.0f}".format(s.total_out or 0) }}</td>

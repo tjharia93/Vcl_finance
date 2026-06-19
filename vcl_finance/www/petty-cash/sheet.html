@@ -10,7 +10,7 @@
 <div class="page" data-pc-editor="1" data-pc-sheet="{{ doc.name }}">
   <div class="page-head">
     <div>
-      <h1>Week {{ doc.week_no }} — Ending {{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }}</h1>
+      <h1>Week {{ doc.week_no }} — Ending {{ frappe.format_value(doc.week_ending, {"fieldtype": "Date"}) }} <span style="font-size:0.6em;color:#666">[{{ doc.float or "Cash" }}]</span></h1>
       <div class="meta">
         Custodian: <strong>{{ doc.custodian_name }}</strong>
         · Status: <span class="status-pill status-{{ doc.status }}">{{ doc.status }}</span>
@@ -75,7 +75,8 @@
       TE Transport-Employee <span class="sep">·</span>
       SE Spares/Engineering <span class="sep">·</span>
       OA Office/Admin <span class="sep">·</span>
-      CM Commission <span class="sep">·</span>
+      FD Food <span class="sep">·</span>
+      GP Geeprint <span class="sep">·</span>
       OT Other
       <span class="sep">|</span>
       <span class="red-code">PC</span> = Petty Cash voucher slip received
@@ -85,23 +86,19 @@
     <div class="section-card-body" style="overflow-x:auto">
       <table class="grid-table">
         <colgroup>
-          <col style="width:32px"><col style="width:90px"><col style="width:80px"><col style="width:160px">
-          <col style="width:75px"><col style="width:75px"><col style="width:75px"><col style="width:75px"><col style="width:75px"><col style="width:75px">
-          <col style="width:90px">
+          <col style="width:32px"><col style="width:100px"><col style="width:90px"><col style="width:180px">
+          <col style="width:90px"><col style="width:110px"><col style="width:40px">
           <col style="width:40px"><col style="width:40px">
-          <col><col style="width:80px">
+          <col><col style="width:90px">
         </colgroup>
         <thead>
           <tr>
-            <th rowspan="2">#</th><th rowspan="2">Date</th><th rowspan="2">Vch No</th><th rowspan="2">Recipient</th>
-            <th colspan="6" class="out">OUT (KES) — by category</th>
-            <th rowspan="2" class="in">IN (KES)</th>
-            <th rowspan="2">PC</th><th rowspan="2">ETR</th>
-            <th rowspan="2">Notes</th><th rowspan="2">Sign</th>
-          </tr>
-          <tr>
-            <th class="cat">TG</th><th class="cat">TE</th><th class="cat">SE</th>
-            <th class="cat">OA</th><th class="cat">CM</th><th class="cat">OT</th>
+            <th>#</th><th>Date</th><th>Vch No</th><th>Recipient</th>
+            <th class="cat">Category</th>
+            <th class="out">Amount (KES)</th>
+            <th class="in">IN?</th>
+            <th>PC</th><th>ETR</th>
+            <th>Notes</th><th>Sign</th>
           </tr>
         </thead>
         <tbody>
@@ -111,13 +108,16 @@
             <td><input type="date" name="txn_date" value="{{ v.txn_date or '' }}"></td>
             <td><input type="text" name="voucher_no" value="{{ v.voucher_no or '' }}"></td>
             <td><input type="text" name="recipient" value="{{ v.recipient or '' }}"></td>
-            <td class="cat-cell"><input type="number" step="0.01" name="amt_tg" value="{{ v.amt_tg or '' }}"></td>
-            <td class="cat-cell"><input type="number" step="0.01" name="amt_te" value="{{ v.amt_te or '' }}"></td>
-            <td class="cat-cell"><input type="number" step="0.01" name="amt_se" value="{{ v.amt_se or '' }}"></td>
-            <td class="cat-cell"><input type="number" step="0.01" name="amt_oa" value="{{ v.amt_oa or '' }}"></td>
-            <td class="cat-cell"><input type="number" step="0.01" name="amt_cm" value="{{ v.amt_cm or '' }}"></td>
-            <td class="cat-cell"><input type="number" step="0.01" name="amt_ot" value="{{ v.amt_ot or '' }}"></td>
-            <td class="in-cell"><input type="number" step="0.01" name="amt_in" value="{{ v.amt_in or '' }}"></td>
+            <td class="cat-cell">
+              <select name="category">
+                <option value="" {% if not v.category %}selected{% endif %}></option>
+                {% for code in ["TG","TE","SE","OA","FD","GP","OT"] %}
+                <option value="{{ code }}" {% if v.category==code %}selected{% endif %}>{{ code }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td class="cat-cell"><input type="number" step="0.01" name="amount" value="{{ v.amount or '' }}"></td>
+            <td class="in-cell center"><input type="checkbox" name="cash_in" {% if v.cash_in %}checked{% endif %}></td>
             <td class="center"><input type="checkbox" name="pc_received" {% if v.pc_received %}checked{% endif %}></td>
             <td class="center"><input type="checkbox" name="etr_received" {% if v.etr_received %}checked{% endif %}></td>
             <td><input type="text" name="notes" value="{{ v.notes or '' }}"></td>
@@ -128,13 +128,9 @@
         <tfoot>
           <tr>
             <td colspan="4" style="text-align:right">WEEKLY TOTALS →</td>
-            <td class="cat-cell" data-foot-cat="TG">—</td>
-            <td class="cat-cell" data-foot-cat="TE">—</td>
-            <td class="cat-cell" data-foot-cat="SE">—</td>
-            <td class="cat-cell" data-foot-cat="OA">—</td>
-            <td class="cat-cell" data-foot-cat="CM">—</td>
-            <td class="cat-cell" data-foot-cat="OT">—</td>
-            <td class="in-cell">—</td>
+            <td class="cat-cell">OUT</td>
+            <td class="out-cell" data-foot-total="out">—</td>
+            <td class="in-cell" data-foot-total="in">—</td>
             <td colspan="4"></td>
           </tr>
         </tfoot>
@@ -254,8 +250,9 @@
             <td><input type="date" name="txn_date" value="{{ w.txn_date or '' }}"></td>
             <td>
               <select name="entry_type">
-                <option value="Wage" {% if w.entry_type=="Wage" %}selected{% endif %}>Wage</option>
-                <option value="Loan" {% if w.entry_type=="Loan" %}selected{% endif %}>Loan</option>
+                {% for t in ["Wage","Overtime","Piecework","Commission"] %}
+                <option value="{{ t }}" {% if w.entry_type==t %}selected{% endif %}>{{ t }}</option>
+                {% endfor %}
               </select>
             </td>
             <td><input type="text" name="recipient" value="{{ w.recipient or '' }}"></td>

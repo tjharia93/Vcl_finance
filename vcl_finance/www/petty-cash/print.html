@@ -126,7 +126,8 @@
         <span class="code">TE</span> Transport-Employee <span class="sep">·</span>
         <span class="code">SE</span> Spares/Engineering <span class="sep">·</span>
         <span class="code">OA</span> Office/Admin <span class="sep">·</span>
-        <span class="code">CM</span> Commission <span class="sep">·</span>
+        <span class="code">FD</span> Food <span class="sep">·</span>
+        <span class="code">GP</span> Geeprint <span class="sep">·</span>
         <span class="code">OT</span> Other <span class="sep">|</span>
         <span class="red-code">PC</span> = Petty Cash voucher slip received <span class="sep">·</span>
         <span class="red-code">ETR</span> = KRA ETR receipt received
@@ -135,21 +136,18 @@
 
     <table class="main-grid">
       <colgroup>
-        <col style="width:2.2%"><col style="width:6%"><col style="width:7%"><col style="width:12%">
-        <col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%"><col style="width:4.8%">
-        <col style="width:7.7%"><col style="width:3.2%"><col style="width:3.2%"><col style="width:18.5%"><col style="width:11.4%">
+        <col style="width:2.2%"><col style="width:7%"><col style="width:9%"><col style="width:18%">
+        <col style="width:7%"><col style="width:9%"><col style="width:5%">
+        <col style="width:3.2%"><col style="width:3.2%"><col style="width:20%"><col style="width:13.2%">
       </colgroup>
       <thead>
         <tr>
-          <th rowspan="2">#</th><th rowspan="2">DATE</th><th rowspan="2">VOUCHER NO</th><th rowspan="2">RECIPIENT</th>
-          <th colspan="6" class="out-spanner">OUT (KES) — by category code</th>
-          <th rowspan="2" class="in-header">IN (KES)</th>
-          <th rowspan="2">PC ✓</th><th rowspan="2">ETR ✓</th>
-          <th rowspan="2">NOTES</th><th rowspan="2">SIGN</th>
-        </tr>
-        <tr>
-          <th class="cat-header">TG</th><th class="cat-header">TE</th><th class="cat-header">SE</th>
-          <th class="cat-header">OA</th><th class="cat-header">CM</th><th class="cat-header">OT</th>
+          <th>#</th><th>DATE</th><th>VOUCHER NO</th><th>RECIPIENT</th>
+          <th class="cat-header">CAT</th>
+          <th class="out-spanner">AMOUNT (KES)</th>
+          <th class="in-header">IN ✓</th>
+          <th>PC ✓</th><th>ETR ✓</th>
+          <th>NOTES</th><th>SIGN</th>
         </tr>
       </thead>
       <tbody>
@@ -160,13 +158,9 @@
           <td>{{ frappe.format_value(v.txn_date, {"fieldtype": "Date"}) if v.txn_date else "" }}</td>
           <td>{{ v.voucher_no or "" }}</td>
           <td>{{ v.recipient or "" }}</td>
-          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_tg) if v.amt_tg else "" }}</td>
-          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_te) if v.amt_te else "" }}</td>
-          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_se) if v.amt_se else "" }}</td>
-          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_oa) if v.amt_oa else "" }}</td>
-          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_cm) if v.amt_cm else "" }}</td>
-          <td class="cat-cell right">{{ "{:,.0f}".format(v.amt_ot) if v.amt_ot else "" }}</td>
-          <td class="in-cell right">{{ "{:,.0f}".format(v.amt_in) if v.amt_in else "" }}</td>
+          <td class="cat-cell" style="text-align:center">{{ v.category or "" }}</td>
+          <td class="{{ 'in-cell' if v.cash_in else 'cat-cell' }} right">{{ "{:,.0f}".format(v.amount) if v.amount else "" }}</td>
+          <td style="text-align:center">{% if v.cash_in %}✓{% endif %}</td>
           <td style="text-align:center">{% if v.pc_received %}✓{% endif %}</td>
           <td style="text-align:center">{% if v.etr_received %}✓{% endif %}</td>
           <td>{{ v.notes or "" }}</td>
@@ -174,9 +168,7 @@
           {% else %}
           <td class="row-num"></td>
           <td></td><td></td><td></td>
-          <td class="cat-cell"></td><td class="cat-cell"></td><td class="cat-cell"></td>
-          <td class="cat-cell"></td><td class="cat-cell"></td><td class="cat-cell"></td>
-          <td class="in-cell"></td>
+          <td class="cat-cell"></td><td class="cat-cell"></td><td></td>
           <td></td><td></td><td></td><td></td>
           {% endif %}
         </tr>
@@ -186,13 +178,9 @@
       <tfoot>
         <tr class="totals">
           <td colspan="4" style="text-align:right;background:#E8EAF0">WEEKLY TOTALS →</td>
-          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.TG) if summary.cat_out.TG else "" }}</td>
-          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.TE) if summary.cat_out.TE else "" }}</td>
-          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.SE) if summary.cat_out.SE else "" }}</td>
-          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.OA) if summary.cat_out.OA else "" }}</td>
-          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.CM) if summary.cat_out.CM else "" }}</td>
-          <td class="cat-cell">{{ "{:,.0f}".format(summary.cat_out.OT) if summary.cat_out.OT else "" }}</td>
-          <td class="in-cell">{{ "{:,.0f}".format(summary.cat_in) if summary.cat_in else "" }}</td>
+          <td class="cat-cell" style="text-align:center">OUT</td>
+          <td class="cat-cell right">{{ "{:,.0f}".format(summary.voucher_total_out) if summary.voucher_total_out else "" }}</td>
+          <td class="in-cell right">{{ "{:,.0f}".format(summary.cat_in) if summary.cat_in else "" }}</td>
           <td colspan="4"></td>
         </tr>
       </tfoot>
@@ -350,6 +338,38 @@
       </tfoot>
     </table>
 
+    <div class="section-bar" style="margin-top:10px">STAFF LOANS</div>
+    <table class="wages-grid">
+      <colgroup><col style="width:3%"><col style="width:9%"><col style="width:22%"><col style="width:10%"><col style="width:26%"><col style="width:13%"><col style="width:13%"><col style="width:4%"></colgroup>
+      <thead>
+        <tr>
+          <th>#</th><th>DATE</th><th>RECIPIENT</th><th>STAFF ID</th>
+          <th>REASON / REFERENCE</th><th>ISSUED (KES)</th><th>SIGNED (KES)</th><th>PAYE?</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for l in doc.loan_entries %}
+        <tr>
+          <td style="text-align:center">{{ l.row_idx }}</td>
+          <td>{{ frappe.format_value(l.txn_date, {"fieldtype": "Date"}) if l.txn_date else "" }}</td>
+          <td>{{ l.recipient or "" }}</td>
+          <td>{{ l.staff_id or "" }}</td>
+          <td>{{ l.reason or "" }}</td>
+          <td class="right">{{ "{:,.0f}".format(l.amount_issued) if l.amount_issued else "" }}</td>
+          <td class="right">{{ "{:,.0f}".format(l.amount_signed) if l.amount_signed else "" }}</td>
+          <td style="text-align:center">{% if l.paye %}Y{% endif %}</td>
+        </tr>
+        {% endfor %}
+      </tbody>
+      <tfoot>
+        <tr>
+          <td colspan="5" style="background:#E8EAF0;text-align:right;font-weight:bold">LOANS ISSUED →</td>
+          <td style="background:#FFF8E1;font-weight:bold;text-align:right">{{ "{:,.0f}".format(summary.loans_total) if summary.loans_total else "" }}</td>
+          <td style="background:#E8EAF0"></td><td style="background:#E8EAF0"></td>
+        </tr>
+      </tfoot>
+    </table>
+
     <table class="header-info" style="margin-top:10px">
       <colgroup><col style="width:25%"><col style="width:25%"><col style="width:25%"><col style="width:25%"></colgroup>
       <tr>
@@ -408,31 +428,31 @@
         <tr>
           <th class="label-cell" style="text-align:left">VOUCHER REGISTER — BY CATEGORY</th>
           <th class="summary-header">TG</th><th class="summary-header">TE</th><th class="summary-header">SE</th>
-          <th class="summary-header">OA</th><th class="summary-header">CM</th><th class="summary-header">OT</th>
+          <th class="summary-header">OA</th><th class="summary-header">FD</th><th class="summary-header">GP</th><th class="summary-header">OT</th>
           <th class="summary-header">TOTAL</th>
         </tr>
       </thead>
       <tbody>
         <tr>
           <td class="label-cell">Cash OUT (KES)</td>
-          {% for code in ["TG","TE","SE","OA","CM","OT"] %}
+          {% for code in ["TG","TE","SE","OA","FD","GP","OT"] %}
             <td class="right">{{ "{:,.0f}".format(summary.cat_out[code]) if summary.cat_out[code] else "" }}</td>
           {% endfor %}
           <td class="total-cell right">{{ "{:,.0f}".format(summary.voucher_total_out) if summary.voucher_total_out else "" }}</td>
         </tr>
         <tr>
           <td class="label-cell">Cash IN (KES) — refunds</td>
-          <td colspan="6" style="text-align:right;background:#F5F6FA"></td>
+          <td colspan="7" style="text-align:right;background:#F5F6FA"></td>
           <td class="total-cell right">{{ "{:,.0f}".format(summary.cat_in) if summary.cat_in else "" }}</td>
         </tr>
         <tr>
           <td class="label-cell">Vouchers / Receipts</td>
-          <td colspan="6" style="text-align:right">PC: <strong>{{ summary.pc_count }}</strong> · ETR: <strong>{{ summary.etr_count }}</strong> · rows used: <strong>{{ summary.voucher_count }}</strong></td>
+          <td colspan="7" style="text-align:right">PC: <strong>{{ summary.pc_count }}</strong> · ETR: <strong>{{ summary.etr_count }}</strong> · rows used: <strong>{{ summary.voucher_count }}</strong></td>
           <td></td>
         </tr>
         <tr class="percent-row">
           <td class="label-cell">% of Voucher Spend</td>
-          {% for code in ["TG","TE","SE","OA","CM","OT"] %}
+          {% for code in ["TG","TE","SE","OA","FD","GP","OT"] %}
             <td class="percent-row">
               {% if summary.voucher_total_out and summary.voucher_total_out > 0 %}{{ ((summary.cat_out[code] / summary.voucher_total_out) * 100)|round(0)|int }}%{% else %}—{% endif %}
             </td>

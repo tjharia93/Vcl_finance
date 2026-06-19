@@ -1,0 +1,11 @@
+[
+ {
+  "desk_access": 1,
+  "disabled": 0,
+  "doctype": "Role",
+  "is_custom": 1,
+  "name": "Petty Cash User",
+  "role_name": "Petty Cash User",
+  "two_factor_auth": 0
+ }
+]

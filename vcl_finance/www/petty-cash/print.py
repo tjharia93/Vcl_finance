@@ -10,7 +10,7 @@ import frappe
 from frappe import _
 
 from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import (
-    DAY_NAMES, VEHICLES, VOUCHER_ROWS,
+    CATEGORY_CODES, DAY_NAMES, VEHICLES, VOUCHER_ROWS,
 )
 
 
@@ -74,24 +74,22 @@ def get_context(context):
     parking_total = sum(parking_by_vehicle.values())
     bike_total = sum((m.amount or 0) for m in bike_rows)
     forklift_total = sum((m.amount or 0) for m in forklift_rows)
-    wages_total = sum((w.amount or 0) for w in doc.wages_entries if w.entry_type == "Wage")
-    loans_total = sum((w.amount or 0) for w in doc.wages_entries if w.entry_type == "Loan")
+    wages_total = sum((w.amount or 0) for w in doc.wages_entries)
+    loans_total = sum((l.amount_issued or 0) for l in doc.loan_entries)
 
     # Category breakdown
-    cat_out = {"TG": 0.0, "TE": 0.0, "SE": 0.0, "OA": 0.0, "CM": 0.0, "OT": 0.0}
+    cat_out = {c: 0.0 for c in CATEGORY_CODES}
     cat_in = 0.0
     pc_count = 0
     etr_count = 0
     voucher_count = 0
     for v in doc.vouchers:
-        cat_out["TG"] += v.amt_tg or 0
-        cat_out["TE"] += v.amt_te or 0
-        cat_out["SE"] += v.amt_se or 0
-        cat_out["OA"] += v.amt_oa or 0
-        cat_out["CM"] += v.amt_cm or 0
-        cat_out["OT"] += v.amt_ot or 0
-        cat_in += v.amt_in or 0
-        if v.voucher_no or v.recipient or any([v.amt_tg, v.amt_te, v.amt_se, v.amt_oa, v.amt_cm, v.amt_ot, v.amt_in]):
+        amt = v.amount or 0
+        if v.cash_in:
+            cat_in += amt
+        elif v.category in cat_out:
+            cat_out[v.category] += amt
+        if v.voucher_no or v.recipient or amt:
             voucher_count += 1
         if v.pc_received:
             pc_count += 1

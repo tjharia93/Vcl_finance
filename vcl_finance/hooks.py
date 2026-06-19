@@ -19,3 +19,11 @@ web_include_js = "/assets/vcl_finance/js/petty_cash.js"
 # -----------------------
 # Run after install: seed Petty Cash Category and the 5 vehicle plates.
 after_install = "vcl_finance.petty_cash.install.after_install"
+
+# Fixtures
+# --------
+# Ship the restricted "Petty Cash User" role (Phase 5 login). Filtered so we
+# only export this app's own role, not every Role on the site.
+fixtures = [
+    {"dt": "Role", "filters": [["role_name", "in", ["Petty Cash User"]]]},
+]

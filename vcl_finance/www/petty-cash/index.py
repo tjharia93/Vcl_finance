@@ -12,7 +12,7 @@ def get_context(context):
     context.sheets = frappe.get_all(
         "Petty Cash Sheet",
         fields=[
-            "name", "week_no", "week_ending", "custodian_name",
+            "name", "week_no", "week_ending", "float", "custodian_name",
             "opening_balance", "total_out", "total_in",
             "expected_close", "variance", "status", "docstatus",
         ],

@@ -157,10 +157,10 @@
       set("sum-wages", (s.wages_total || 0) + (s.loans_total || 0));
       set("sum-expected", s.expected_close);
       set("sum-variance", s.variance);
-      Object.entries(s.cat_out || {}).forEach(([k, v]) => {
-        const cell = document.querySelector(`[data-foot-cat="${k}"]`);
-        if (cell) cell.textContent = fmt(v);
-      });
+      const outCell = document.querySelector('[data-foot-total="out"]');
+      if (outCell) outCell.textContent = fmt(s.voucher_total_out);
+      const inCell = document.querySelector('[data-foot-total="in"]');
+      if (inCell) inCell.textContent = fmt(s.cat_in);
       Object.entries(s.parking_by_vehicle || {}).forEach(([k, v]) => {
         const cell = document.querySelector(`[data-veh-total="${CSS.escape(k)}"]`);
         if (cell) cell.textContent = fmt(v);

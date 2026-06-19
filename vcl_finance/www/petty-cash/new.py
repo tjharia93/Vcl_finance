@@ -27,13 +27,14 @@ def get_context(context):
         custodian_name = frappe.form_dict.get("custodian_name") or "Shiro"
         opening_balance = float(frappe.form_dict.get("opening_balance") or 0)
         authorised_float = float(frappe.form_dict.get("authorised_float") or 50000)
+        float_name = frappe.form_dict.get("float") or "Cash"
 
         if not week_ending:
             frappe.throw(_("Week Ending is required."))
 
         # Re-use the same helper the API exposes
         from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import create_for_week
-        name = create_for_week(week_ending, custodian_name, opening_balance, authorised_float)
+        name = create_for_week(week_ending, custodian_name, opening_balance, authorised_float, float_name)
         frappe.local.flags.redirect_location = f"/petty-cash/sheet?name={name}"
         raise frappe.Redirect
 

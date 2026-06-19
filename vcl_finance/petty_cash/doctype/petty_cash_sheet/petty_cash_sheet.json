@@ -43,6 +43,7 @@
   "status",
   "col_break_status",
   "amended_from",
+  "journal_entry",
   "section_notes",
   "notes"
  ],
@@ -81,6 +82,7 @@
   {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Draft\nSubmitted\nApproved", "default": "Draft", "in_list_view": 1, "in_standard_filter": 1},
   {"fieldname": "col_break_status", "fieldtype": "Column Break"},
   {"fieldname": "amended_from", "fieldtype": "Link", "label": "Amended From", "options": "Petty Cash Sheet", "read_only": 1, "print_hide": 1, "no_copy": 1},
+  {"fieldname": "journal_entry", "fieldtype": "Link", "label": "Draft Journal Entry", "options": "Journal Entry", "read_only": 1, "no_copy": 1, "description": "Back-link to the shadow→aligned Draft JE generated for this sheet (Phase 2). Never auto-submitted."},
   {"fieldname": "section_notes", "fieldtype": "Section Break", "label": "Notes", "collapsible": 1},
   {"fieldname": "notes", "fieldtype": "Text Editor", "label": "Notes"}
  ],

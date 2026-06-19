@@ -1,0 +1,173 @@
+{% extends "templates/web.html" %}
+
+{% block title %}{{ title }}{% endblock %}
+
+{% block head_include %}
+<meta name="csrf_token" content="{{ frappe.session.csrf_token }}">
+<link rel="stylesheet" href="/assets/vcl_finance/css/petty_cash_entry.css">
+{% endblock %}
+
+{% block page_content %}
+{% if sheet is none %}
+<div class="page wz-pick">
+  <div class="page-head"><h1>Add a petty-cash entry</h1></div>
+  <p class="meta">Pick the week &amp; float to record against.</p>
+  {% if open_sheets %}
+    {% for os in open_sheets %}
+      <a class="sheetlink" href="/petty-cash/entry?name={{ os.name }}">
+        <span>{{ os.label }}</span><span class="arr">Add entries ›</span>
+      </a>
+    {% endfor %}
+  {% else %}
+    <p class="meta">No open weeks yet.</p>
+  {% endif %}
+  <a class="newlink btn btn-primary" href="/petty-cash/new">＋ Start a new week</a>
+</div>
+{% else %}
+<div class="page-narrow">
+  <main class="wz" id="wz" data-sheet="{{ doc.name }}" data-status="{{ doc.status }}">
+    <header class="wz-top">
+      <a class="wz-back" href="/petty-cash/sheet?name={{ doc.name }}" title="Back to grid">‹</a>
+      <div class="wz-wk">Wk{{ doc.week_no }} · {{ doc.week_ending }} · {{ doc.float }}</div>
+      <div class="wz-bal-wrap">
+        <div class="wz-bal-lbl">Cash remaining</div>
+        <div class="wz-bal" id="wzBal">{{ "{:,.0f}".format(summary.expected_close or 0) }}</div>
+      </div>
+    </header>
+    {% if doc.status in ['Submitted', 'Approved'] %}
+      <div class="wz-closed-banner">This week is {{ doc.status|lower }} — re-open it from the grid to add entries.</div>
+    {% endif %}
+
+    <div class="wz-grid">
+      <!-- ===== wizard stage ===== -->
+      <section class="wz-stage" id="wzStage">
+        <div class="wz-stage-head">
+          <button type="button" class="wz-x" id="wzClose" title="Close">✕</button>
+          <span class="wz-title" id="wzTitle">New entry</span>
+          <span class="wz-dots" id="wzDots"></span>
+        </div>
+
+        <div class="wz-body">
+          <!-- TYPE -->
+          <div class="wz-step" data-step="type">
+            <div class="wz-step-lbl">What are you recording?</div>
+            <div class="wz-chips wz-typegrid" id="wzTypeChips">
+              {% for t in entry_types %}
+                <div class="wz-chip" data-kind="{{ t.kind }}">
+                  {{ t.label }}<span class="wz-chip-sub">{{ t.hint }}</span>
+                </div>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- AMOUNT -->
+          <div class="wz-step" data-step="amount">
+            <button type="button" class="wz-typepill" id="wzTypePill">VOUCHER ▾</button>
+            <div class="wz-amt-lbl">Amount (KES)</div>
+            <div class="wz-amt empty" id="wzAmt"><span class="cur">KES</span><span id="wzAmtVal">0</span></div>
+            <div class="wz-keys" id="wzKeys">
+              {% for k in ['1','2','3','4','5','6','7','8','9','.','0','⌫'] %}
+                <button type="button" class="wz-key" data-key="{{ k }}">{{ k }}</button>
+              {% endfor %}
+            </div>
+          </div>
+
+          <!-- CATEGORY (voucher) -->
+          <div class="wz-step" data-step="category">
+            <div class="wz-step-lbl">Spend category</div>
+            <div class="wz-echo" id="wzEchoCat"></div>
+            <div class="wz-chips" id="wzCatChips">
+              {% for c in categories %}
+                <div class="wz-chip" data-cat="{{ c.code }}">
+                  <span class="cdot" style="background:{{ c.color }}"></span>{{ c.label }}
+                </div>
+              {% endfor %}
+              <div class="wz-chip in" data-cat="IN">＋ {{ cash_in.label }}</div>
+            </div>
+          </div>
+
+          <!-- PARKING -->
+          <div class="wz-step" data-step="parking">
+            <div class="wz-step-lbl">Parking</div>
+            <div class="wz-echo" id="wzEchoPark"></div>
+            <div class="wz-field"><div class="lb">Day</div>
+              <select id="wzDay">
+                {% for d in days %}<option value="{{ loop.index0 }}">{{ d }}</option>{% endfor %}
+              </select>
+            </div>
+            <div class="wz-field"><div class="lb">Vehicle</div>
+              <select id="wzVehicle">
+                {% for v in vehicles %}<option value="{{ v }}">{{ v }}</option>{% endfor %}
+              </select>
+            </div>
+          </div>
+
+          <!-- DETAILS -->
+          <div class="wz-step" data-step="details">
+            <div class="wz-step-lbl" id="wzDetLbl">Details</div>
+            <div class="wz-echo" id="wzEchoDet"></div>
+
+            <div class="wz-field" data-when="all"><div class="lb">Date</div>
+              <input type="date" id="wzDate">
+            </div>
+            <div class="wz-field" data-when="voucher wage commission loan"><div class="lb">Recipient</div>
+              <input type="text" id="wzRecipient" placeholder="Who was paid">
+            </div>
+            <div class="wz-row2">
+              <div class="wz-field" data-when="voucher"><div class="lb">Voucher #</div>
+                <input type="text" id="wzVoucherNo" placeholder="e.g. V-0231">
+              </div>
+              <div class="wz-field" data-when="wage commission loan"><div class="lb">Staff ID</div>
+                <input type="text" id="wzStaffId" placeholder="optional">
+              </div>
+            </div>
+            <div class="wz-field" data-when="wage commission loan"><div class="lb">Reason</div>
+              <input type="text" id="wzReason" placeholder="optional">
+            </div>
+            <div class="wz-field" data-when="bike forklift"><div class="lb">Note</div>
+              <input type="text" id="wzNotes" placeholder="optional">
+            </div>
+
+            <div class="wz-toggles" data-when="voucher">
+              <div class="wz-tg" id="wzPc">PC receipt</div>
+              <div class="wz-tg" id="wzEtr">ETR receipt</div>
+            </div>
+            <div class="wz-toggles" data-when="wage commission loan">
+              <div class="wz-tg" id="wzPaye">PAYE</div>
+            </div>
+
+            <div class="wz-receipt" data-when="voucher">
+              <button type="button" class="wz-rcpt-btn" id="wzRcptBtn">📷 Add receipt photo</button>
+              <input type="file" id="wzRcptFile" accept="image/*" capture="environment" hidden>
+              <div class="wz-rcpt-prev" id="wzRcptPrev" hidden>
+                <img id="wzRcptImg" alt="receipt">
+                <button type="button" class="wz-rcpt-x" id="wzRcptRemove" title="Remove">✕</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="wz-foot" id="wzFoot">
+          <button type="button" class="wz-btn ghost" id="wzBack">‹ Back</button>
+          <button type="button" class="wz-btn next" id="wzNext">Next ›</button>
+          <button type="button" class="wz-btn save" id="wzSave" style="display:none">Save entry ✓</button>
+        </div>
+      </section>
+
+      <!-- ===== feed ===== -->
+      <section class="wz-feed" id="wzFeed"></section>
+    </div>
+
+    <div class="wz-newbar">
+      <button type="button" class="wz-newbtn" id="wzNew" {% if doc.status in ['Submitted', 'Approved'] %}disabled{% endif %}>＋ New entry</button>
+    </div>
+  </main>
+
+  <script id="wz-data" type="application/json">{{ wz_data }}</script>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block script %}
+{% if sheet is not none %}<script src="/assets/vcl_finance/js/petty_cash_entry.js"></script>{% endif %}
+{% endblock %}

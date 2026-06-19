@@ -33,6 +33,29 @@ class PettyCashSheet(Document):
         # `closing_balance` mirrors `expected_close` so legacy reports stay aligned.
         self.closing_balance = self.expected_close
 
+    # ------------------------------------------------------------------
+    # Carry-forward — opening balance from the prior week's close
+    # ------------------------------------------------------------------
+
+    def carry_forward_opening(self):
+        """Set ``opening_balance`` from the most recent prior sheet for the SAME float.
+
+        Basis (Tanuj 2026-06-10):
+          - counted cash (``cash_count_end``) if a physical count was entered;
+          - otherwise the expected close (opening − out + in);
+          - a NEGATIVE close is carried **as-is** — it's a real signal the float is
+            overdrawn / awaiting reimbursement, never clamped to zero.
+
+        Returns the chosen opening (or ``None`` when there's no prior sheet, i.e.
+        the first week for this float). Only mutates ``opening_balance``; the
+        caller decides when to persist.
+        """
+        info = _prior_close(self.float, self.week_ending, exclude=self.name)
+        if info is None:
+            return None
+        self.opening_balance = info["balance"]
+        return info["balance"]
+
     def on_submit(self):
         self.status = "Submitted"
 
@@ -177,6 +200,64 @@ def _as_date(v):
     return datetime.fromisoformat(str(v)).date()
 
 
+def _closing_cash(doc):
+    """The cash to carry out of a sheet → (balance, basis).
+
+    Prefer the physical count if one was entered; otherwise the expected close.
+    Negative is carried as-is (Tanuj 2026-06-10).
+    """
+    counted = doc.cash_count_end or 0
+    if counted:
+        return round(counted, 2), "counted"
+    return round(doc.expected_close or 0, 2), "expected"
+
+
+def _prior_close(float_name, week_ending, exclude=None):
+    """Carry-forward decision from the most recent sheet for ``float_name`` ending
+    strictly before ``week_ending``. Returns None when there's no prior sheet.
+
+    Skips cancelled sheets (docstatus 2). ``exclude`` drops a sheet by name (the
+    sheet we're computing for, on re-save).
+    """
+    if not float_name or not week_ending:
+        return None
+    we = _as_date(week_ending)
+    filters = {
+        "float": float_name,
+        "week_ending": ("<", we),
+        "docstatus": ("<", 2),
+    }
+    if exclude:
+        filters["name"] = ("!=", exclude)
+    rows = frappe.get_all(
+        "Petty Cash Sheet",
+        filters=filters,
+        fields=["name", "week_no", "week_ending"],
+        order_by="week_ending desc",
+        limit=1,
+    )
+    if not rows:
+        return None
+    prev = frappe.get_doc("Petty Cash Sheet", rows[0]["name"])
+    bal, basis = _closing_cash(prev)
+    return {
+        "balance": bal,
+        "basis": basis,
+        "prior_name": prev.name,
+        "label": f"Wk{prev.week_no} · {_as_date(prev.week_ending).isoformat()} · {prev.float}",
+    }
+
+
+@frappe.whitelist()
+def carry_forward(float_name="Cash", week_ending=None, before=None):
+    """Whitelisted: what opening should a new ``float_name`` sheet carry into the
+    week ending ``week_ending`` (or ``before``)? Used by the New-sheet form to
+    pre-fill Opening Balance. Returns ``{}`` when there's no prior sheet."""
+    we = week_ending or before
+    info = _prior_close(float_name or "Cash", we)
+    return info or {}
+
+
 @frappe.whitelist()
 def week_dates(week_ending):
     """Mon–Sat ISO date strings for the week that ends on the given Friday."""
@@ -262,8 +343,21 @@ def create_for_week(week_ending, custodian_name="Shiro", opening_balance=0, auth
     doc.week_ending = we
     doc.float = float_name
     doc.custodian_name = custodian_name or "Shiro"
-    doc.opening_balance = float(opening_balance or 0)
     doc.authorised_float = float(authorised_float or 50000)
     doc.status = "Draft"
+
+    # Opening balance: honour an explicit value; otherwise carry forward the prior
+    # week's close for this float (negative carried as-is). A carried value of 0
+    # only happens when the prior sheet truly closed at 0.
+    try:
+        explicit = float(opening_balance)
+    except (TypeError, ValueError):
+        explicit = 0.0
+    if explicit:
+        doc.opening_balance = explicit
+    else:
+        carried = doc.carry_forward_opening()
+        doc.opening_balance = carried if carried is not None else 0.0
+
     doc.insert()
     return doc.name

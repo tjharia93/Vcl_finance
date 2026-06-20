@@ -44,47 +44,268 @@
   "col_break_status",
   "amended_from",
   "journal_entry",
+  "backfill",
   "section_notes",
   "notes"
  ],
  "fields": [
-  {"fieldname": "section_header", "fieldtype": "Section Break", "label": "Week"},
-  {"fieldname": "naming_series", "fieldtype": "Select", "label": "Series", "options": "PCS-.YYYY.-", "default": "PCS-.YYYY.-", "reqd": 1, "no_copy": 1, "print_hide": 1},
-  {"fieldname": "week_no", "fieldtype": "Int", "label": "Week No (ISO)", "read_only": 1, "in_list_view": 1, "in_standard_filter": 1},
-  {"fieldname": "week_ending", "fieldtype": "Date", "label": "Week Ending (Friday)", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1, "description": "Must be a Friday. Unique per float (enforced in controller)."},
-  {"fieldname": "float", "fieldtype": "Select", "label": "Float", "options": "Cash\nHauz-Pay", "default": "Cash", "reqd": 1, "in_list_view": 1, "in_standard_filter": 1, "description": "Which petty-cash float this sheet covers. One sheet per (Week Ending, Float)."},
-  {"fieldname": "col_break_header", "fieldtype": "Column Break"},
-  {"fieldname": "custodian", "fieldtype": "Link", "label": "Custodian", "options": "Employee", "in_list_view": 1},
-  {"fieldname": "custodian_name", "fieldtype": "Data", "label": "Custodian (free text)", "default": "Shiro", "description": "Fallback / display name if custodian is not linked to an Employee."},
-  {"fieldname": "section_balance", "fieldtype": "Section Break", "label": "Cash Balance"},
-  {"fieldname": "opening_balance", "fieldtype": "Currency", "label": "Opening Balance", "options": "currency", "non_negative": 1, "default": "0"},
-  {"fieldname": "closing_balance", "fieldtype": "Currency", "label": "Closing Balance (computed)", "options": "currency", "read_only": 1},
-  {"fieldname": "col_break_balance", "fieldtype": "Column Break"},
-  {"fieldname": "cash_count_end", "fieldtype": "Currency", "label": "Physical Cash Count (end)", "options": "currency", "non_negative": 1, "default": "0"},
-  {"fieldname": "authorised_float", "fieldtype": "Currency", "label": "Authorised Float", "options": "currency", "non_negative": 1, "default": "50000"},
-  {"fieldname": "section_summary", "fieldtype": "Section Break", "label": "Weekly Totals (computed)"},
-  {"fieldname": "total_out", "fieldtype": "Currency", "label": "Total Cash OUT", "options": "currency", "read_only": 1, "in_list_view": 1},
-  {"fieldname": "total_in", "fieldtype": "Currency", "label": "Total Cash IN", "options": "currency", "read_only": 1},
-  {"fieldname": "col_break_summary", "fieldtype": "Column Break"},
-  {"fieldname": "expected_close", "fieldtype": "Currency", "label": "Expected Close = Opening − Out + In", "options": "currency", "read_only": 1, "in_list_view": 1},
-  {"fieldname": "variance", "fieldtype": "Currency", "label": "Variance = Cash Count − Expected", "options": "currency", "read_only": 1, "in_list_view": 1},
-  {"fieldname": "section_vouchers", "fieldtype": "Section Break", "label": "Voucher Register", "collapsible": 1},
-  {"fieldname": "vouchers", "fieldtype": "Table", "label": "Vouchers", "options": "Petty Cash Voucher"},
-  {"fieldname": "section_parking", "fieldtype": "Section Break", "label": "Vehicle Parking", "collapsible": 1},
-  {"fieldname": "parking_entries", "fieldtype": "Table", "label": "Parking Entries", "options": "Petty Cash Parking Entry"},
-  {"fieldname": "section_misc", "fieldtype": "Section Break", "label": "Bike Fuel & Forklift", "collapsible": 1},
-  {"fieldname": "misc_entries", "fieldtype": "Table", "label": "Misc Entries", "options": "Petty Cash Misc Entry"},
-  {"fieldname": "section_wages", "fieldtype": "Section Break", "label": "Wages", "collapsible": 1},
-  {"fieldname": "wages_entries", "fieldtype": "Table", "label": "Wages", "options": "Petty Cash Wages Entry"},
-  {"fieldname": "section_loans", "fieldtype": "Section Break", "label": "Staff Loans", "collapsible": 1},
-  {"fieldname": "loan_entries", "fieldtype": "Table", "label": "Loans", "options": "Petty Cash Loan Entry"},
-  {"fieldname": "section_status", "fieldtype": "Section Break", "label": "Status"},
-  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "Draft\nSubmitted\nApproved", "default": "Draft", "in_list_view": 1, "in_standard_filter": 1},
-  {"fieldname": "col_break_status", "fieldtype": "Column Break"},
-  {"fieldname": "amended_from", "fieldtype": "Link", "label": "Amended From", "options": "Petty Cash Sheet", "read_only": 1, "print_hide": 1, "no_copy": 1},
-  {"fieldname": "journal_entry", "fieldtype": "Link", "label": "Draft Journal Entry", "options": "Journal Entry", "read_only": 1, "no_copy": 1, "description": "Back-link to the shadow→aligned Draft JE generated for this sheet (Phase 2). Never auto-submitted."},
-  {"fieldname": "section_notes", "fieldtype": "Section Break", "label": "Notes", "collapsible": 1},
-  {"fieldname": "notes", "fieldtype": "Text Editor", "label": "Notes"}
+  {
+   "fieldname": "section_header",
+   "fieldtype": "Section Break",
+   "label": "Week"
+  },
+  {
+   "fieldname": "naming_series",
+   "fieldtype": "Select",
+   "label": "Series",
+   "options": "PCS-.YYYY.-",
+   "default": "PCS-.YYYY.-",
+   "reqd": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "week_no",
+   "fieldtype": "Int",
+   "label": "Week No (ISO)",
+   "read_only": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "week_ending",
+   "fieldtype": "Date",
+   "label": "Week Ending (Friday)",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Must be a Friday. Unique per float (enforced in controller)."
+  },
+  {
+   "fieldname": "float",
+   "fieldtype": "Select",
+   "label": "Float",
+   "options": "Cash\nHauz-Pay",
+   "default": "Cash",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Which petty-cash float this sheet covers. One sheet per (Week Ending, Float)."
+  },
+  {
+   "fieldname": "col_break_header",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "custodian",
+   "fieldtype": "Link",
+   "label": "Custodian",
+   "options": "Employee",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "custodian_name",
+   "fieldtype": "Data",
+   "label": "Custodian (free text)",
+   "default": "Shiro",
+   "description": "Fallback / display name if custodian is not linked to an Employee."
+  },
+  {
+   "fieldname": "section_balance",
+   "fieldtype": "Section Break",
+   "label": "Cash Balance"
+  },
+  {
+   "fieldname": "opening_balance",
+   "fieldtype": "Currency",
+   "label": "Opening Balance",
+   "options": "currency",
+   "non_negative": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "closing_balance",
+   "fieldtype": "Currency",
+   "label": "Closing Balance (computed)",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_balance",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cash_count_end",
+   "fieldtype": "Currency",
+   "label": "Physical Cash Count (end)",
+   "options": "currency",
+   "non_negative": 1,
+   "default": "0"
+  },
+  {
+   "fieldname": "authorised_float",
+   "fieldtype": "Currency",
+   "label": "Authorised Float",
+   "options": "currency",
+   "non_negative": 1,
+   "default": "50000"
+  },
+  {
+   "fieldname": "section_summary",
+   "fieldtype": "Section Break",
+   "label": "Weekly Totals (computed)"
+  },
+  {
+   "fieldname": "total_out",
+   "fieldtype": "Currency",
+   "label": "Total Cash OUT",
+   "options": "currency",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "total_in",
+   "fieldtype": "Currency",
+   "label": "Total Cash IN",
+   "options": "currency",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_break_summary",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "expected_close",
+   "fieldtype": "Currency",
+   "label": "Expected Close = Opening \u2212 Out + In",
+   "options": "currency",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "variance",
+   "fieldtype": "Currency",
+   "label": "Variance = Cash Count \u2212 Expected",
+   "options": "currency",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "section_vouchers",
+   "fieldtype": "Section Break",
+   "label": "Voucher Register",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "vouchers",
+   "fieldtype": "Table",
+   "label": "Vouchers",
+   "options": "Petty Cash Voucher"
+  },
+  {
+   "fieldname": "section_parking",
+   "fieldtype": "Section Break",
+   "label": "Vehicle Parking",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "parking_entries",
+   "fieldtype": "Table",
+   "label": "Parking Entries",
+   "options": "Petty Cash Parking Entry"
+  },
+  {
+   "fieldname": "section_misc",
+   "fieldtype": "Section Break",
+   "label": "Bike Fuel & Forklift",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "misc_entries",
+   "fieldtype": "Table",
+   "label": "Misc Entries",
+   "options": "Petty Cash Misc Entry"
+  },
+  {
+   "fieldname": "section_wages",
+   "fieldtype": "Section Break",
+   "label": "Wages",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "wages_entries",
+   "fieldtype": "Table",
+   "label": "Wages",
+   "options": "Petty Cash Wages Entry"
+  },
+  {
+   "fieldname": "section_loans",
+   "fieldtype": "Section Break",
+   "label": "Staff Loans",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "loan_entries",
+   "fieldtype": "Table",
+   "label": "Loans",
+   "options": "Petty Cash Loan Entry"
+  },
+  {
+   "fieldname": "section_status",
+   "fieldtype": "Section Break",
+   "label": "Status"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nSubmitted\nApproved",
+   "default": "Draft",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "col_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "amended_from",
+   "fieldtype": "Link",
+   "label": "Amended From",
+   "options": "Petty Cash Sheet",
+   "read_only": 1,
+   "print_hide": 1,
+   "no_copy": 1
+  },
+  {
+   "fieldname": "journal_entry",
+   "fieldtype": "Link",
+   "label": "Draft Journal Entry",
+   "options": "Journal Entry",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Back-link to the shadow\u2192aligned Draft JE generated for this sheet (Phase 2). Never auto-submitted."
+  },
+  {
+   "fieldname": "backfill",
+   "fieldtype": "Check",
+   "label": "Backfill (historical import)",
+   "default": "0",
+   "description": "Set on sheets imported from the intranet so a non-Friday week-ending is allowed. Leave unchecked for normal weekly sheets.",
+   "read_only": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "section_notes",
+   "fieldtype": "Section Break",
+   "label": "Notes",
+   "collapsible": 1
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Text Editor",
+   "label": "Notes"
+  }
  ],
  "links": [],
  "modified": "2026-06-19 00:00:00",

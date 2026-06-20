@@ -69,6 +69,11 @@ class PettyCashSheet(Document):
     def validate_week_ending(self):
         if not self.week_ending:
             return
+        if self.backfill:
+            # Historical sheets imported from the intranet keep their exact
+            # recorded week-ending even when it isn't a Friday. New sheets still
+            # enforce the Sat->Fri rule below.
+            return
         we = _as_date(self.week_ending)
         if we.weekday() != 4:  # Friday
             frappe.throw(_("Week Ending must be a Friday. Got {0} ({1}).").format(

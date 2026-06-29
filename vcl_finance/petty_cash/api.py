@@ -18,7 +18,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate
+from frappe.utils import flt, getdate, add_days
 
 from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import (
     VEHICLES, DAY_NAMES, CATEGORY_CODES,
@@ -451,3 +451,201 @@ def attach_receipt(sheet, voucher_name, file_url):
     row.receipt = file_url
     doc.save()
     return {"ok": True, "voucher_name": voucher_name, "receipt": file_url}
+
+
+# ----------------------------------------------------------------------
+# Petty Cash Analytics — Accounts-Manager-only aggregate view.
+# Server enforces the role (never trust the client); cancelled rows are excluded
+# from every spend figure but surfaced separately as "voided".
+# ----------------------------------------------------------------------
+
+_ANALYTICS_ROLES = {"Accounts Manager", "System Manager"}
+
+
+def _assert_accounts_manager():
+    if not (set(frappe.get_roles()) & _ANALYTICS_ROLES):
+        frappe.throw(
+            _("Petty Cash Analytics is restricted to Accounts Managers."),
+            frappe.PermissionError,
+        )
+
+
+def _sheet_closing(sheet):
+    """Cash carried out of a sheet: physical count if entered, else expected close."""
+    cnt = flt(sheet.cash_count_end)
+    return cnt if cnt else flt(sheet.expected_close)
+
+
+@frappe.whitelist()
+def petty_cash_analytics(period="8"):
+    """Aggregate analytics across Petty Cash Sheets. Accounts-Manager-only.
+
+    ``period`` = number of trailing weeks ("4"/"8"/"12") or "all". Cancelled rows
+    are excluded from all spend figures; voided entries are reported separately.
+    """
+    _assert_accounts_manager()
+
+    weeks = int(period) if str(period).isdigit() else None
+    filters = {}
+    if weeks:
+        filters["week_ending"] = (">=", add_days(getdate(), -7 * weeks))
+
+    sheets = frappe.get_all(
+        "Petty Cash Sheet", filters=filters,
+        fields=["name", "float", "week_ending", "week_no", "opening_balance",
+                "expected_close", "cash_count_end", "variance", "status", "custodian_name"],
+        order_by="week_ending asc",
+    )
+
+    cat = {c: 0.0 for c in CATEGORY_CODES}
+    total_out = total_in = 0.0
+    sections = {"wages": 0.0, "loans": 0.0, "parking": 0.0, "bike": 0.0, "forklift": 0.0}
+    by_float = {}                 # float -> {out, in, current, week_ending}
+    week_bucket = {}              # week_ending(str) -> {out, in, cat:{...}}
+    variance_trend = []
+    recipients = {}               # recipient -> spend
+    voided_count = 0
+    voided_value = 0.0
+    voided_log = []
+    voucher_spend_n = 0
+    voucher_receipt_n = 0
+
+    for s in sheets:
+        we = str(s.week_ending)
+        wk = week_bucket.setdefault(we, {"out": 0.0, "in": 0.0, "cat": {c: 0.0 for c in CATEGORY_CODES}})
+        fl = by_float.setdefault(s.float, {"out": 0.0, "in": 0.0, "current": 0.0, "week_ending": None})
+        # latest sheet per float drives the "current cash position"
+        if fl["week_ending"] is None or we >= fl["week_ending"]:
+            fl["week_ending"] = we
+            fl["current"] = _sheet_closing(s)
+
+        doc = frappe.get_doc("Petty Cash Sheet", s.name)
+
+        def _void(amount, kind, label, date, remark, when):
+            nonlocal voided_count, voided_value
+            voided_count += 1
+            voided_value += flt(amount)
+            voided_log.append({
+                "date": str(date) if date else we, "kind": kind, "label": label,
+                "amount": flt(amount, 2), "remark": remark or "",
+                "when": str(when) if when else None, "sheet": s.name,
+                "float": s.float, "custodian": s.custodian_name or "",
+            })
+
+        for v in doc.vouchers:
+            amt = flt(v.amount)
+            if v.cancelled:
+                if amt:
+                    _void(amt, "voucher", CAT_LABEL.get(v.category or "OT", "Voucher"),
+                          v.txn_date, v.cancel_remark, v.cancelled_on)
+                continue
+            if not amt:
+                continue
+            if v.cash_in:
+                total_in += amt
+                fl["in"] += amt
+                wk["in"] += amt
+            else:
+                code = v.category if v.category in cat else "OT"
+                cat[code] += amt
+                wk["cat"][code] += amt
+                total_out += amt
+                fl["out"] += amt
+                wk["out"] += amt
+                voucher_spend_n += 1
+                if v.pc_received or v.etr_received:
+                    voucher_receipt_n += 1
+                who = (v.recipient or "").strip()
+                if who:
+                    recipients[who] = recipients.get(who, 0.0) + amt
+
+        for w in doc.wages_entries:
+            amt = flt(w.amount)
+            if w.cancelled:
+                if amt:
+                    _void(amt, "wage", w.entry_type or "Wage", w.txn_date, w.cancel_remark, w.cancelled_on)
+                continue
+            if amt:
+                sections["wages"] += amt; total_out += amt; fl["out"] += amt; wk["out"] += amt
+
+        for l in doc.loan_entries:
+            amt = flt(l.amount_issued)
+            if l.cancelled:
+                if amt:
+                    _void(amt, "loan", "Loan", l.txn_date, l.cancel_remark, l.cancelled_on)
+                continue
+            if amt:
+                sections["loans"] += amt; total_out += amt; fl["out"] += amt; wk["out"] += amt
+
+        for m in doc.misc_entries:
+            amt = flt(m.amount)
+            key = "bike" if m.kind == "Bike Fuel" else "forklift"
+            if m.cancelled:
+                if amt:
+                    _void(amt, key, m.kind, m.txn_date, m.cancel_remark, m.cancelled_on)
+                continue
+            if amt:
+                sections[key] += amt; total_out += amt; fl["out"] += amt; wk["out"] += amt
+
+        for p in doc.parking_entries:
+            amt = flt(p.amount)
+            if p.cancelled:
+                if amt:
+                    _void(amt, "parking", f"Parking · {p.vehicle}", None, p.cancel_remark, p.cancelled_on)
+                continue
+            if amt:
+                sections["parking"] += amt; total_out += amt; fl["out"] += amt; wk["out"] += amt
+
+        if flt(s.cash_count_end):
+            variance_trend.append({
+                "week_ending": we, "week_no": s.week_no, "float": s.float,
+                "expected_close": flt(s.expected_close, 2),
+                "cash_count_end": flt(s.cash_count_end, 2),
+                "variance": flt(s.variance, 2),
+            })
+
+    weeks_sorted = sorted(week_bucket.keys())
+    category_trend = {
+        "weeks": weeks_sorted,
+        "series": {c: [flt(week_bucket[w]["cat"][c], 2) for w in weeks_sorted] for c in CATEGORY_CODES},
+        "out": [flt(week_bucket[w]["out"], 2) for w in weeks_sorted],
+        "in": [flt(week_bucket[w]["in"], 2) for w in weeks_sorted],
+    }
+    top_recipients = sorted(
+        ({"recipient": r, "total": flt(v, 2)} for r, v in recipients.items()),
+        key=lambda x: -x["total"],
+    )[:10]
+    coverage = round(100.0 * voucher_receipt_n / voucher_spend_n, 1) if voucher_spend_n else None
+    voided_log.sort(key=lambda x: (x["when"] or x["date"] or ""), reverse=True)
+
+    return {
+        "currency": "KES",
+        "period": period,
+        "weeks": len(weeks_sorted),
+        "sheet_count": len(sheets),
+        "from": weeks_sorted[0] if weeks_sorted else None,
+        "to": weeks_sorted[-1] if weeks_sorted else None,
+        "kpi": {
+            "total_out": flt(total_out, 2),
+            "total_in": flt(total_in, 2),
+            "net": flt(total_in - total_out, 2),
+            "voided_count": voided_count,
+            "voided_value": flt(voided_value, 2),
+            "receipt_coverage_pct": coverage,
+            "voucher_spend_count": voucher_spend_n,
+        },
+        "by_category": [
+            {"code": c, "label": CAT_LABEL.get(c, c), "total": flt(cat[c], 2)}
+            for c in CATEGORY_CODES
+        ],
+        "category_trend": category_trend,
+        "by_float": [
+            {"float": k, "out": flt(v["out"], 2), "in": flt(v["in"], 2),
+             "current": flt(v["current"], 2)}
+            for k, v in sorted(by_float.items())
+        ],
+        "sections": {k: flt(v, 2) for k, v in sections.items()},
+        "variance_trend": variance_trend,
+        "top_recipients": top_recipients,
+        "voided_log": voided_log[:50],
+    }

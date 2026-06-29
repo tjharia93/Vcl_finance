@@ -8,13 +8,19 @@
   "day_idx",
   "vehicle",
   "slot",
-  "amount"
+  "amount",
+  "cancelled",
+  "cancelled_on",
+  "cancel_remark"
  ],
  "fields": [
   {"fieldname": "day_idx", "fieldtype": "Select", "label": "Day", "options": "Mon\nTue\nWed\nThu\nFri\nSat", "in_list_view": 1, "columns": 1, "reqd": 1},
   {"fieldname": "vehicle", "fieldtype": "Select", "label": "Vehicle", "options": "KAP 466\nKAY 635\nKCB 430\nKBQ 788\nKBT 972", "in_list_view": 1, "columns": 2, "reqd": 1},
   {"fieldname": "slot", "fieldtype": "Int", "label": "Slot (1 or 2)", "in_list_view": 1, "columns": 1, "non_negative": 1, "reqd": 1, "default": "1"},
-  {"fieldname": "amount", "fieldtype": "Currency", "label": "Amount", "options": "currency", "non_negative": 1, "in_list_view": 1, "columns": 2, "default": "0"}
+  {"fieldname": "amount", "fieldtype": "Currency", "label": "Amount", "options": "currency", "non_negative": 1, "in_list_view": 1, "columns": 2, "default": "0"},
+  {"fieldname": "cancelled", "fieldtype": "Check", "label": "Cancelled (void)", "default": "0", "description": "Voided entry — kept on the sheet for audit but excluded from all totals and posting."},
+  {"fieldname": "cancelled_on", "fieldtype": "Datetime", "label": "Cancelled On", "read_only": 1},
+  {"fieldname": "cancel_remark", "fieldtype": "Small Text", "label": "Cancel Remark"}
  ],
  "istable": 1,
  "links": [],

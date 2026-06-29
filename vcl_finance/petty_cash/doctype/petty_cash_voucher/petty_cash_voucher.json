@@ -17,7 +17,10 @@
   "pc_received",
   "etr_received",
   "receipt",
-  "notes"
+  "notes",
+  "cancelled",
+  "cancelled_on",
+  "cancel_remark"
  ],
  "fields": [
   {"fieldname": "row_idx", "fieldtype": "Int", "label": "Row", "in_list_view": 1, "columns": 1, "read_only": 1},
@@ -32,7 +35,10 @@
   {"fieldname": "pc_received", "fieldtype": "Check", "label": "PC slip received", "default": "0", "description": "Tick if the petty-cash voucher slip is attached."},
   {"fieldname": "etr_received", "fieldtype": "Check", "label": "ETR receipt received", "default": "0", "description": "Tick if the KRA ETR receipt is attached."},
   {"fieldname": "receipt", "fieldtype": "Attach Image", "label": "Receipt photo"},
-  {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes / Description"}
+  {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes / Description"},
+  {"fieldname": "cancelled", "fieldtype": "Check", "label": "Cancelled (void)", "default": "0", "description": "Voided entry — kept on the sheet for audit but excluded from all totals and posting."},
+  {"fieldname": "cancelled_on", "fieldtype": "Datetime", "label": "Cancelled On", "read_only": 1},
+  {"fieldname": "cancel_remark", "fieldtype": "Small Text", "label": "Cancel Remark"}
  ],
  "istable": 1,
  "links": [],

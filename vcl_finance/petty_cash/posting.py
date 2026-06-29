@@ -93,7 +93,10 @@ def _explode(sheet):
     lines = []
 
     # --- Vouchers (one line per row, by category) ---
+    # Cancelled (voided) rows are never posted — excluded before any line is built.
     for v in sorted(sheet.vouchers, key=lambda x: x.row_idx or 0):
+        if v.cancelled:
+            continue
         amt = flt(v.amount, 2)
         if not amt:
             continue
@@ -118,6 +121,8 @@ def _explode(sheet):
 
     # --- Wages (by entry_type; Commission/Piecework parked) ---
     for w in sorted(sheet.wages_entries, key=lambda x: x.row_idx or 0):
+        if w.cancelled:
+            continue
         amt = flt(w.amount, 2)
         if amt <= 0:
             continue
@@ -140,6 +145,8 @@ def _explode(sheet):
 
     # --- Loans (only the cash issued leaves the float) ---
     for l in sorted(sheet.loan_entries, key=lambda x: x.row_idx or 0):
+        if l.cancelled:
+            continue
         issued = flt(l.amount_issued, 2)
         if issued <= 0:
             continue
@@ -155,7 +162,7 @@ def _explode(sheet):
         })
 
     # --- Parking (aggregated) ---
-    pk = flt(sum(flt(p.amount) for p in sheet.parking_entries), 2)
+    pk = flt(sum(flt(p.amount) for p in sheet.parking_entries if not p.cancelled), 2)
     if pk:
         lines.append({
             "src_key": "PARKING", "memo": "Parking — all vehicles/days",
@@ -163,13 +170,13 @@ def _explode(sheet):
         })
 
     # --- Bike fuel / Forklift (aggregated) ---
-    bike = flt(sum(flt(m.amount) for m in sheet.misc_entries if m.kind == "Bike Fuel"), 2)
+    bike = flt(sum(flt(m.amount) for m in sheet.misc_entries if m.kind == "Bike Fuel" and not m.cancelled), 2)
     if bike:
         lines.append({
             "src_key": "BIKE", "memo": "Bike fuel",
             "amount": bike, "erp_account": CAT_DEFAULT["bike"], "post": True, "reason": None,
         })
-    fork = flt(sum(flt(m.amount) for m in sheet.misc_entries if m.kind == "Forklift"), 2)
+    fork = flt(sum(flt(m.amount) for m in sheet.misc_entries if m.kind == "Forklift" and not m.cancelled), 2)
     if fork:
         lines.append({
             "src_key": "FORKLIFT", "memo": "Forklift gas",

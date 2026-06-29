@@ -61,20 +61,24 @@ def _date_str(d):
 # ----------------------------------------------------------------------
 
 def _summary(doc):
+    # Cancelled (voided) rows are excluded from every figure here so cash-remaining,
+    # expected close and variance all ignore them (they remain on the sheet for audit).
     cat = {c: 0.0 for c in CATEGORY_CODES}
     cat_in = 0.0
     for v in doc.vouchers:
+        if v.cancelled:
+            continue
         amt = flt(v.amount)
         if v.cash_in:
             cat_in += amt
         elif v.category in cat:
             cat[v.category] += amt
 
-    parking_total = flt(sum(flt(p.amount) for p in doc.parking_entries))
-    bike_total = flt(sum(flt(m.amount) for m in doc.misc_entries if m.kind == "Bike Fuel"))
-    forklift_total = flt(sum(flt(m.amount) for m in doc.misc_entries if m.kind == "Forklift"))
-    wages_total = flt(sum(flt(w.amount) for w in doc.wages_entries))
-    loans_total = flt(sum(flt(l.amount_issued) for l in doc.loan_entries))
+    parking_total = flt(sum(flt(p.amount) for p in doc.parking_entries if not p.cancelled))
+    bike_total = flt(sum(flt(m.amount) for m in doc.misc_entries if m.kind == "Bike Fuel" and not m.cancelled))
+    forklift_total = flt(sum(flt(m.amount) for m in doc.misc_entries if m.kind == "Forklift" and not m.cancelled))
+    wages_total = flt(sum(flt(w.amount) for w in doc.wages_entries if not w.cancelled))
+    loans_total = flt(sum(flt(l.amount_issued) for l in doc.loan_entries if not l.cancelled))
     voucher_out = flt(sum(cat.values()))
 
     total_out = voucher_out + parking_total + bike_total + forklift_total + wages_total + loans_total
@@ -116,6 +120,7 @@ def _feed_items(doc):
                 "subtitle": (v.voucher_no or v.recipient or ""), "amount": out_amt,
                 "direction": "out", "color": CAT_COLOR.get(code), "ticks": ticks,
                 "receipt": v.receipt or None,
+                "cancelled": bool(v.cancelled), "cancel_remark": v.cancel_remark or "",
             })
         if in_amt:
             items.append({
@@ -124,6 +129,7 @@ def _feed_items(doc):
                 "recipient": v.recipient or "", "voucher_no": v.voucher_no or "",
                 "subtitle": v.voucher_no or "", "amount": in_amt, "direction": "in",
                 "color": CAT_COLOR["IN"], "ticks": ticks, "receipt": v.receipt or None,
+                "cancelled": bool(v.cancelled), "cancel_remark": v.cancel_remark or "",
             })
 
     for w in doc.wages_entries:
@@ -137,6 +143,7 @@ def _feed_items(doc):
             "recipient": w.recipient or "", "staff_id": w.staff_id or "", "reason": w.reason or "",
             "subtitle": w.reason or w.staff_id or "", "amount": flt(w.amount), "direction": "out",
             "color": TYPE_COLOR.get(kind), "ticks": {"paye": bool(w.paye)}, "receipt": None,
+            "cancelled": bool(w.cancelled), "cancel_remark": w.cancel_remark or "",
         })
 
     for l in doc.loan_entries:
@@ -149,6 +156,7 @@ def _feed_items(doc):
             "subtitle": l.reason or l.staff_id or "", "amount": flt(l.amount_issued),
             "direction": "out", "color": TYPE_COLOR["loan"], "ticks": {"paye": bool(l.paye)},
             "receipt": None,
+            "cancelled": bool(l.cancelled), "cancel_remark": l.cancel_remark or "",
         })
 
     for m in doc.misc_entries:
@@ -160,6 +168,7 @@ def _feed_items(doc):
             "date": _date_str(m.txn_date), "label": m.kind, "recipient": "",
             "notes": m.notes or "", "subtitle": m.notes or "", "amount": flt(m.amount),
             "direction": "out", "color": TYPE_COLOR.get(kind), "ticks": {}, "receipt": None,
+            "cancelled": bool(m.cancelled), "cancel_remark": m.cancel_remark or "",
         })
 
     for p in doc.parking_entries:
@@ -171,6 +180,7 @@ def _feed_items(doc):
             "label": "Parking", "recipient": p.vehicle,
             "subtitle": f"{p.day_idx} · slot {p.slot}", "amount": flt(p.amount),
             "direction": "out", "color": TYPE_COLOR["parking"], "ticks": {}, "receipt": None,
+            "cancelled": bool(p.cancelled), "cancel_remark": p.cancel_remark or "",
         })
 
     # Newest first: dated desc, undated sink under dated (stable by id).
@@ -347,6 +357,79 @@ def _truthy(v):
     if isinstance(v, str):
         return v.strip().lower() in ("1", "true", "yes", "on")
     return bool(v)
+
+
+# ----------------------------------------------------------------------
+# Cancel / reinstate a single feed entry (soft-void — ERPNext never deletes;
+# the row stays on the sheet for audit, just excluded from totals + posting).
+# ----------------------------------------------------------------------
+
+_CHILD_TABLES = (
+    "vouchers", "wages_entries", "loan_entries", "misc_entries", "parking_entries",
+)
+
+
+def _find_row(doc, entry_id):
+    """Locate the child row (and its table) whose ``name`` == entry_id."""
+    for table in _CHILD_TABLES:
+        for r in (doc.get(table) or []):
+            if r.name == entry_id:
+                return table, r
+    return None, None
+
+
+def _open_sheet_for_write(sheet):
+    """Shared guard: write permission + sheet not Submitted/Approved. Returns the doc."""
+    if not frappe.has_permission("Petty Cash Sheet", "write", sheet):
+        frappe.throw(_("Not permitted."), frappe.PermissionError)
+    doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    if doc.docstatus != 0 or doc.status in ("Submitted", "Approved"):
+        frappe.throw(_("That week is closed — re-open it before changing entries."))
+    return doc
+
+
+@frappe.whitelist(methods=["POST"])
+def cancel_entry(sheet, entry_id, remark=None):
+    """Soft-cancel (void) ONE child row — it is NOT deleted.
+
+    Sets ``cancelled=1`` + ``cancelled_on`` + ``cancel_remark`` on the row, re-saves
+    the parent (which re-derives totals, excluding cancelled rows) and returns the
+    recomputed ``summary``. The row stays on the sheet for the audit trail.
+    ``entry_id`` is the feed item's ``id`` (the child row name).
+    """
+    doc = _open_sheet_for_write(sheet)
+    table, row = _find_row(doc, entry_id)
+    if row is None:
+        frappe.throw(_("That entry no longer exists on this sheet."))
+
+    row.cancelled = 1
+    row.cancelled_on = frappe.utils.now_datetime()
+    row.cancel_remark = (remark or "").strip() or None
+
+    doc.flags.ignore_permissions = False
+    doc.save()
+
+    return {"ok": True, "sheet": doc.name, "cancelled_in": table,
+            "entry_id": entry_id, "summary": _summary(doc)}
+
+
+@frappe.whitelist(methods=["POST"])
+def reinstate_entry(sheet, entry_id):
+    """Reverse a mistaken cancel — clears ``cancelled`` so the row counts again."""
+    doc = _open_sheet_for_write(sheet)
+    table, row = _find_row(doc, entry_id)
+    if row is None:
+        frappe.throw(_("That entry no longer exists on this sheet."))
+
+    row.cancelled = 0
+    row.cancelled_on = None
+    row.cancel_remark = None
+
+    doc.flags.ignore_permissions = False
+    doc.save()
+
+    return {"ok": True, "sheet": doc.name, "reinstated_in": table,
+            "entry_id": entry_id, "summary": _summary(doc)}
 
 
 # ----------------------------------------------------------------------

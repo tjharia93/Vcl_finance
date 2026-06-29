@@ -169,10 +169,14 @@ class PettyCashSheet(Document):
     # ------------------------------------------------------------------
 
     def compute_totals(self):
+        # Cancelled (voided) rows stay on the sheet for audit but never count
+        # toward any total, expected close, variance, or posting.
         cat = {c: 0.0 for c in CATEGORY_CODES}
         voucher_out = 0.0
         total_in = 0.0
         for v in self.vouchers:
+            if v.cancelled:
+                continue
             amt = v.amount or 0
             if v.cash_in:
                 total_in += amt
@@ -181,11 +185,11 @@ class PettyCashSheet(Document):
                 if v.category in cat:
                     cat[v.category] += amt
 
-        parking_out = sum((p.amount or 0) for p in self.parking_entries)
-        misc_out = sum((m.amount or 0) for m in self.misc_entries)
-        wages_out = sum((w.amount or 0) for w in self.wages_entries)
+        parking_out = sum((p.amount or 0) for p in self.parking_entries if not p.cancelled)
+        misc_out = sum((m.amount or 0) for m in self.misc_entries if not m.cancelled)
+        wages_out = sum((w.amount or 0) for w in self.wages_entries if not w.cancelled)
         # Only the cash actually issued leaves the float.
-        loans_out = sum((l.amount_issued or 0) for l in self.loan_entries)
+        loans_out = sum((l.amount_issued or 0) for l in self.loan_entries if not l.cancelled)
 
         self.total_out = voucher_out + parking_out + misc_out + wages_out + loans_out
         self.total_in = total_in
@@ -284,6 +288,8 @@ def summary(name):
     pc_count = 0
     etr_count = 0
     for v in doc.vouchers:
+        if v.cancelled:  # voided rows excluded from all totals + counts
+            continue
         amt = v.amount or 0
         if v.cash_in:
             cat_in += amt
@@ -299,13 +305,15 @@ def summary(name):
     parking_by_vehicle = {v: 0.0 for v in VEHICLES}
     parking_by_day = {d: 0.0 for d in DAY_NAMES}
     for p in doc.parking_entries:
+        if p.cancelled:
+            continue
         parking_by_vehicle[p.vehicle] = parking_by_vehicle.get(p.vehicle, 0) + (p.amount or 0)
         parking_by_day[p.day_idx] = parking_by_day.get(p.day_idx, 0) + (p.amount or 0)
 
-    bike_total = sum((m.amount or 0) for m in doc.misc_entries if m.kind == "Bike Fuel")
-    forklift_total = sum((m.amount or 0) for m in doc.misc_entries if m.kind == "Forklift")
-    wages_total = sum((w.amount or 0) for w in doc.wages_entries)
-    loans_total = sum((l.amount_issued or 0) for l in doc.loan_entries)
+    bike_total = sum((m.amount or 0) for m in doc.misc_entries if m.kind == "Bike Fuel" and not m.cancelled)
+    forklift_total = sum((m.amount or 0) for m in doc.misc_entries if m.kind == "Forklift" and not m.cancelled)
+    wages_total = sum((w.amount or 0) for w in doc.wages_entries if not w.cancelled)
+    loans_total = sum((l.amount_issued or 0) for l in doc.loan_entries if not l.cancelled)
 
     return {
         "cat_out": cat,

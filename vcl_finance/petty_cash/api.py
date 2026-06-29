@@ -198,6 +198,24 @@ def get_feed(sheet):
 
 
 # ----------------------------------------------------------------------
+# Accounts-Manager guard (defined here so all call sites below can use it)
+# ----------------------------------------------------------------------
+
+PETTY_PRIV = {"Accounts Manager", "System Manager"}
+
+
+def _is_accounts_manager():
+    return bool(set(frappe.get_roles()) & PETTY_PRIV)
+
+
+def _assert_can_write(sheet):
+    """Block edits to a locked week unless the caller is an Accounts Manager."""
+    if sheet.is_locked() and not _is_accounts_manager():
+        frappe.throw("This week is closed. Only an Accounts Manager can edit it.",
+                     frappe.PermissionError)
+
+
+# ----------------------------------------------------------------------
 # Quick-entry (ports /api/quick-entry)
 # ----------------------------------------------------------------------
 
@@ -232,9 +250,9 @@ def quick_entry(sheet, kind, **fields):
         frappe.throw(_("Not permitted."), frappe.PermissionError)
 
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    _assert_can_write(doc)
     if doc.docstatus != 0 or doc.status in ("Submitted", "Approved"):
         frappe.throw(_("That week is closed — re-open it before adding entries."))
-    _assert_can_write(doc)
 
     kind = (kind or "").lower()
     txn_date = getdate(fields.get("txn_date")) if fields.get("txn_date") else None
@@ -379,20 +397,6 @@ def _find_row(doc, entry_id):
     return None, None
 
 
-PETTY_PRIV = {"Accounts Manager", "System Manager"}
-
-
-def _is_accounts_manager():
-    return bool(set(frappe.get_roles()) & PETTY_PRIV)
-
-
-def _assert_can_write(sheet):
-    """Block edits to a locked week unless the caller is an Accounts Manager."""
-    if sheet.is_locked() and not _is_accounts_manager():
-        frappe.throw("This week is closed. Only an Accounts Manager can edit it.",
-                     frappe.PermissionError)
-
-
 def _open_sheet_for_write(sheet):
     """Shared guard: write permission + sheet not Submitted/Approved. Returns the doc."""
     if not frappe.has_permission("Petty Cash Sheet", "write", sheet):
@@ -474,6 +478,7 @@ def attach_receipt(sheet, voucher_name, file_url):
 def close_week(sheet, cash_count_end):
     if not _is_accounts_manager():
         frappe.throw("Only an Accounts Manager can close a week.", frappe.PermissionError)
+    frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
     doc.cash_count_end = float(cash_count_end)
     doc.status = "Closed"
@@ -488,6 +493,7 @@ def close_week(sheet, cash_count_end):
 def reopen_week(sheet):
     if not _is_accounts_manager():
         frappe.throw("Only an Accounts Manager can reopen a week.", frappe.PermissionError)
+    frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
     doc.status = "Draft"
     doc.closed_by = None
@@ -511,21 +517,22 @@ def range_report(from_date, to_date, float=None):
         d = frappe.get_doc("Petty Cash Sheet", nm)
         for v in d.vouchers:
             if v.cancelled: continue
-            if v.cash_in: tin += v.amount
+            if v.cash_in: tin += flt(v.amount)
             else:
-                out += v.amount
-                by_cat[v.category] = by_cat.get(v.category, 0.0) + v.amount
+                out += flt(v.amount)
+                if v.category:  # skip blank/None rows — would pollute by_cat with a None key
+                    by_cat[v.category] = by_cat.get(v.category, 0.0) + flt(v.amount)
         for w in d.wages_entries:
-            if not w.cancelled: out += w.amount; wages += w.amount
+            if not w.cancelled: out += flt(w.amount); wages += flt(w.amount)
         for l in d.loan_entries:
-            if not l.cancelled: out += l.amount_issued; loans += l.amount_issued
+            if not l.cancelled: out += flt(l.amount_issued); loans += flt(l.amount_issued)
         for p in d.parking_entries:
-            if not p.cancelled: out += p.amount; parking += p.amount
+            if not p.cancelled: out += flt(p.amount); parking += flt(p.amount)
         for m in d.misc_entries:
             if m.cancelled: continue
-            out += m.amount
-            if m.kind == "Forklift": forklift += m.amount
-            else: bike += m.amount
+            out += flt(m.amount)
+            if m.kind == "Forklift": forklift += flt(m.amount)
+            else: bike += flt(m.amount)
         weeks.append({"name": d.name, "week_ending": str(d.week_ending), "float": d.float,
                       "expected_close": d.expected_close, "cash_count_end": d.cash_count_end,
                       "variance": d.variance, "status": d.status})

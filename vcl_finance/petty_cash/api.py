@@ -464,6 +464,7 @@ def attach_receipt(sheet, voucher_name, file_url):
     if not frappe.has_permission("Petty Cash Sheet", "write", sheet):
         frappe.throw(_("Not permitted."), frappe.PermissionError)
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    _assert_can_write(doc)
     if doc.docstatus != 0:
         frappe.throw(_("Sheet is submitted — cannot change receipts."))
     row = next((v for v in doc.vouchers if v.name == voucher_name), None)
@@ -480,7 +481,7 @@ def close_week(sheet, cash_count_end):
         frappe.throw("Only an Accounts Manager can close a week.", frappe.PermissionError)
     frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
-    doc.cash_count_end = float(cash_count_end)
+    doc.cash_count_end = flt(cash_count_end)
     doc.status = "Closed"
     doc.closed_by = frappe.session.user
     doc.closed_on = frappe.utils.now_datetime()

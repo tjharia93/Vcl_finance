@@ -23,11 +23,23 @@ class PettyCashSheet(Document):
     # ------------------------------------------------------------------
 
     def validate(self):
+        self.guard_locked_write()
         self.validate_week_ending()
         self.validate_unique_float()
         self.derive_week_no()
         self.ensure_grid()
         self.compute_totals()
+
+    def guard_locked_write(self):
+        """ORM-layer lock: a Closed/Submitted/Approved week may only be saved by an
+        Accounts Manager. Covers direct doctype writes (the Compass grid) that bypass
+        api._assert_can_write."""
+        if self.is_new() or not self.is_locked():
+            return
+        if set(frappe.get_roles()) & {"Accounts Manager", "System Manager"}:
+            return
+        frappe.throw(_("This week is closed. Only an Accounts Manager can edit it."),
+                     frappe.PermissionError)
 
     def before_save(self):
         # `closing_balance` mirrors `expected_close` so legacy reports stay aligned.

@@ -29,6 +29,8 @@
   "col_break_summary",
   "expected_close",
   "variance",
+  "closed_by",
+  "closed_on",
   "section_vouchers",
   "vouchers",
   "section_parking",
@@ -190,6 +192,8 @@
    "read_only": 1,
    "in_list_view": 1
   },
+  { "fieldname": "closed_by", "fieldtype": "Link", "options": "User", "label": "Closed By", "read_only": 1 },
+  { "fieldname": "closed_on", "fieldtype": "Datetime", "label": "Closed On", "read_only": 1 },
   {
    "fieldname": "section_vouchers",
    "fieldtype": "Section Break",
@@ -259,7 +263,7 @@
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Draft\nSubmitted\nApproved",
+   "options": "Draft\nSubmitted\nApproved\nClosed",
    "default": "Draft",
    "in_list_view": 1,
    "in_standard_filter": 1

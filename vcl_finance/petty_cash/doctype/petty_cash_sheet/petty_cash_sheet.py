@@ -56,6 +56,10 @@ class PettyCashSheet(Document):
         self.opening_balance = info["balance"]
         return info["balance"]
 
+    def is_locked(self):
+        """A week is locked once closed (or historically Submitted/Approved)."""
+        return self.status in ("Closed", "Submitted", "Approved")
+
     def on_submit(self):
         self.status = "Submitted"
 

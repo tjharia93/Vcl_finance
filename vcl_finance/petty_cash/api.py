@@ -497,6 +497,45 @@ def reopen_week(sheet):
             "cash_count_end": doc.cash_count_end, "variance": doc.variance}
 
 
+@frappe.whitelist()
+def range_report(from_date, to_date, float=None):
+    if not _is_accounts_manager():
+        frappe.throw("Accounts Manager only.", frappe.PermissionError)
+    filters = {"week_ending": ["between", [from_date, to_date]]}
+    if float:
+        filters["float"] = float
+    names = frappe.get_all("Petty Cash Sheet", filters=filters, pluck="name")
+    by_cat, weeks = {}, []
+    out = tin = wages = loans = parking = bike = forklift = 0.0
+    for nm in names:
+        d = frappe.get_doc("Petty Cash Sheet", nm)
+        for v in d.vouchers:
+            if v.cancelled: continue
+            if v.cash_in: tin += v.amount
+            else:
+                out += v.amount
+                by_cat[v.category] = by_cat.get(v.category, 0.0) + v.amount
+        for w in d.wages_entries:
+            if not w.cancelled: out += w.amount; wages += w.amount
+        for l in d.loan_entries:
+            if not l.cancelled: out += l.amount_issued; loans += l.amount_issued
+        for p in d.parking_entries:
+            if not p.cancelled: out += p.amount; parking += p.amount
+        for m in d.misc_entries:
+            if m.cancelled: continue
+            out += m.amount
+            if m.kind == "Forklift": forklift += m.amount
+            else: bike += m.amount
+        weeks.append({"name": d.name, "week_ending": str(d.week_ending), "float": d.float,
+                      "expected_close": d.expected_close, "cash_count_end": d.cash_count_end,
+                      "variance": d.variance, "status": d.status})
+    return {"from_date": from_date, "to_date": to_date, "float": float,
+            "total_out": out, "total_in": tin, "net": tin - out, "by_category": by_cat,
+            "sections": {"wages": wages, "loans": loans, "parking": parking,
+                         "bike": bike, "forklift": forklift},
+            "weeks": sorted(weeks, key=lambda x: x["week_ending"])}
+
+
 # ----------------------------------------------------------------------
 # Petty Cash Analytics — Accounts-Manager-only aggregate view.
 # Server enforces the role (never trust the client); cancelled rows are excluded

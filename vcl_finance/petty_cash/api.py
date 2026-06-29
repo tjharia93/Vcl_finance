@@ -470,6 +470,33 @@ def attach_receipt(sheet, voucher_name, file_url):
     return {"ok": True, "voucher_name": voucher_name, "receipt": file_url}
 
 
+@frappe.whitelist(methods=["POST"])
+def close_week(sheet, cash_count_end):
+    if not _is_accounts_manager():
+        frappe.throw("Only an Accounts Manager can close a week.", frappe.PermissionError)
+    doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    doc.cash_count_end = float(cash_count_end)
+    doc.status = "Closed"
+    doc.closed_by = frappe.session.user
+    doc.closed_on = frappe.utils.now_datetime()
+    doc.save()  # controller recomputes total_out/expected_close/variance
+    return {"name": doc.name, "status": doc.status, "expected_close": doc.expected_close,
+            "cash_count_end": doc.cash_count_end, "variance": doc.variance}
+
+
+@frappe.whitelist(methods=["POST"])
+def reopen_week(sheet):
+    if not _is_accounts_manager():
+        frappe.throw("Only an Accounts Manager can reopen a week.", frappe.PermissionError)
+    doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    doc.status = "Draft"
+    doc.closed_by = None
+    doc.closed_on = None
+    doc.save()
+    return {"name": doc.name, "status": doc.status, "expected_close": doc.expected_close,
+            "cash_count_end": doc.cash_count_end, "variance": doc.variance}
+
+
 # ----------------------------------------------------------------------
 # Petty Cash Analytics — Accounts-Manager-only aggregate view.
 # Server enforces the role (never trust the client); cancelled rows are excluded

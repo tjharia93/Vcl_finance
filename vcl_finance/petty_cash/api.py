@@ -234,6 +234,7 @@ def quick_entry(sheet, kind, **fields):
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
     if doc.docstatus != 0 or doc.status in ("Submitted", "Approved"):
         frappe.throw(_("That week is closed — re-open it before adding entries."))
+    _assert_can_write(doc)
 
     kind = (kind or "").lower()
     txn_date = getdate(fields.get("txn_date")) if fields.get("txn_date") else None
@@ -378,6 +379,20 @@ def _find_row(doc, entry_id):
     return None, None
 
 
+PETTY_PRIV = {"Accounts Manager", "System Manager"}
+
+
+def _is_accounts_manager():
+    return bool(set(frappe.get_roles()) & PETTY_PRIV)
+
+
+def _assert_can_write(sheet):
+    """Block edits to a locked week unless the caller is an Accounts Manager."""
+    if sheet.is_locked() and not _is_accounts_manager():
+        frappe.throw("This week is closed. Only an Accounts Manager can edit it.",
+                     frappe.PermissionError)
+
+
 def _open_sheet_for_write(sheet):
     """Shared guard: write permission + sheet not Submitted/Approved. Returns the doc."""
     if not frappe.has_permission("Petty Cash Sheet", "write", sheet):
@@ -398,6 +413,7 @@ def cancel_entry(sheet, entry_id, remark=None):
     ``entry_id`` is the feed item's ``id`` (the child row name).
     """
     doc = _open_sheet_for_write(sheet)
+    _assert_can_write(doc)
     table, row = _find_row(doc, entry_id)
     if row is None:
         frappe.throw(_("That entry no longer exists on this sheet."))
@@ -417,6 +433,7 @@ def cancel_entry(sheet, entry_id, remark=None):
 def reinstate_entry(sheet, entry_id):
     """Reverse a mistaken cancel — clears ``cancelled`` so the row counts again."""
     doc = _open_sheet_for_write(sheet)
+    _assert_can_write(doc)
     table, row = _find_row(doc, entry_id)
     if row is None:
         frappe.throw(_("That entry no longer exists on this sheet."))

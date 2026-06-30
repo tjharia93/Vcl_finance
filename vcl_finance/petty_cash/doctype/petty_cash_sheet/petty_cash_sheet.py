@@ -375,18 +375,16 @@ def create_for_week(week_ending, custodian_name="Shiro", opening_balance=0, auth
     doc.authorised_float = float(authorised_float or 50000)
     doc.status = "Draft"
 
-    # Opening balance: honour an explicit value; otherwise carry forward the prior
-    # week's close for this float (negative carried as-is). A carried value of 0
-    # only happens when the prior sheet truly closed at 0.
+    # Opening balance: always carry forward the prior week's close for this float
+    # (negative carried as-is — real signal, never clamped). The passed
+    # opening_balance is only used as a fallback when there is no prior sheet
+    # for this float (i.e. the very first week).
     try:
-        explicit = float(opening_balance)
+        fallback = float(opening_balance)
     except (TypeError, ValueError):
-        explicit = 0.0
-    if explicit:
-        doc.opening_balance = explicit
-    else:
-        carried = doc.carry_forward_opening()
-        doc.opening_balance = carried if carried is not None else 0.0
+        fallback = 0.0
+    carried = doc.carry_forward_opening()
+    doc.opening_balance = carried if carried is not None else fallback
 
     doc.insert()
     return doc.name

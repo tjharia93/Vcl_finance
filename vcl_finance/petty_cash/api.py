@@ -15,6 +15,7 @@ parking ``day_idx`` Mon..Sat string; misc ``kind`` "Bike Fuel"/"Forklift".
 Everything recomputes server-side — client amounts are never trusted for totals.
 """
 import json
+from datetime import timedelta
 
 import frappe
 from frappe import _
@@ -213,6 +214,58 @@ def _assert_can_write(sheet):
     if sheet.is_locked() and not _is_accounts_manager():
         frappe.throw("This week is closed. Only an Accounts Manager can edit it.",
                      frappe.PermissionError)
+
+
+@frappe.whitelist()
+def week_status(float_name, date):
+    """For a given date + float, return the containing week's status WITHOUT creating it.
+
+    Lets the entry wizard warn a custodian before they fill in an entry for a closed week.
+    The petty-cash week runs Mon–Sat, anchored to Friday as ``week_ending``.
+    Sunday is treated as the start of the coming week (next Friday).
+
+    Returns::
+
+        {
+            "week_ending": "YYYY-MM-DD",   # Friday of the containing week
+            "sheet": name_or_None,          # existing Petty Cash Sheet name, or None
+            "status": "Draft"|"Closed"|"Submitted"|"Approved"|"New",
+            "locked": bool,                 # True when status in Closed/Submitted/Approved
+            "is_accounts_manager": bool,    # whether the caller may override a lock
+        }
+    """
+    d = getdate(date)
+    # Week runs Mon(0)–Sat(5), Friday(4) is the week_ending anchor.
+    # Saturday belongs to the same (just-past) Friday.
+    # Sunday opens the next week → next Friday.
+    wd = d.weekday()
+    if wd == 6:  # Sunday → coming week
+        week_ending = d + timedelta(days=5)
+    else:  # Mon–Sat: offset to the Friday of this week (negative for Sat → yesterday)
+        week_ending = d + timedelta(days=(4 - wd))
+
+    _LOCKED = {"Closed", "Submitted", "Approved"}
+    existing = frappe.db.get_value(
+        "Petty Cash Sheet",
+        {"week_ending": week_ending, "float": float_name, "docstatus": ("<", 2)},
+        ["name", "status"],
+        as_dict=True,
+    )
+    if not existing:
+        return {
+            "week_ending": str(week_ending),
+            "sheet": None,
+            "status": "New",
+            "locked": False,
+            "is_accounts_manager": _is_accounts_manager(),
+        }
+    return {
+        "week_ending": str(week_ending),
+        "sheet": existing["name"],
+        "status": existing["status"],
+        "locked": existing["status"] in _LOCKED,
+        "is_accounts_manager": _is_accounts_manager(),
+    }
 
 
 # ----------------------------------------------------------------------

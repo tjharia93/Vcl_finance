@@ -317,6 +317,9 @@ def quick_entry(sheet, kind, **fields):
         cat = (fields.get("category") or "").upper()
         if not cash_in and cat not in CATEGORY_CODES:
             frappe.throw(_("Pick a spend category (or tick Cash-in)."))
+        # A spend voucher must have a receipt slip recorded — PC or ETR.
+        if not cash_in and not (_truthy(fields.get("pc_received")) or _truthy(fields.get("etr_received"))):
+            frappe.throw(_("Tick PC or ETR — a spend voucher needs a receipt slip recorded."))
         target = _first_blank(
             sorted(doc.vouchers, key=lambda x: x.row_idx or 0),
             lambda v: not _voucher_has_data(v),

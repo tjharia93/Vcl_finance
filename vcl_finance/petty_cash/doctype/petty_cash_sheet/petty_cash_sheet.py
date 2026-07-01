@@ -41,6 +41,18 @@ class PettyCashSheet(Document):
         frappe.throw(_("This week is closed. Only an Accounts Manager can edit it."),
                      frappe.PermissionError)
 
+    def check_if_locked(self):
+        # Frappe Cloud's shared filesystem can leave a "phantom" document lock:
+        # os.path.exists() reports the .lock file present, but stat() 404s, so the
+        # core lock-age check (file_lock.lock_age) crashes every save with
+        # FileNotFoundError. Swallow only that specific glitch so a transient stale
+        # lock file can't block petty-cash saves; a genuine DocumentLockedError still
+        # propagates.
+        try:
+            super().check_if_locked()
+        except FileNotFoundError:
+            pass
+
     def before_save(self):
         # `closing_balance` mirrors `expected_close` so legacy reports stay aligned.
         self.closing_balance = self.expected_close

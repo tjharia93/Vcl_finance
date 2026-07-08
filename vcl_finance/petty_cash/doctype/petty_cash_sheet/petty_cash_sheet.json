@@ -31,6 +31,8 @@
   "variance",
   "closed_by",
   "closed_on",
+  "approved_by",
+  "approved_on",
   "section_vouchers",
   "vouchers",
   "section_parking",
@@ -77,11 +79,11 @@
   {
    "fieldname": "week_ending",
    "fieldtype": "Date",
-   "label": "Week Ending (Friday)",
+   "label": "Week Ending (Saturday)",
    "reqd": 1,
    "in_list_view": 1,
    "in_standard_filter": 1,
-   "description": "Must be a Friday. Unique per float (enforced in controller)."
+   "description": "Must be a Saturday. Unique per float (enforced in controller)."
   },
   {
    "fieldname": "float",
@@ -192,8 +194,32 @@
    "read_only": 1,
    "in_list_view": 1
   },
-  { "fieldname": "closed_by", "fieldtype": "Link", "options": "User", "label": "Closed By", "read_only": 1 },
-  { "fieldname": "closed_on", "fieldtype": "Datetime", "label": "Closed On", "read_only": 1 },
+  {
+   "fieldname": "closed_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Closed By",
+   "read_only": 1
+  },
+  {
+   "fieldname": "closed_on",
+   "fieldtype": "Datetime",
+   "label": "Closed On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Approved By",
+   "read_only": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1
+  },
   {
    "fieldname": "section_vouchers",
    "fieldtype": "Section Break",
@@ -295,7 +321,7 @@
    "fieldtype": "Check",
    "label": "Backfill (historical import)",
    "default": "0",
-   "description": "Set on sheets imported from the intranet so a non-Friday week-ending is allowed. Leave unchecked for normal weekly sheets.",
+   "description": "Set on sheets imported from the intranet so a non-Saturday week-ending is allowed. Leave unchecked for normal weekly sheets.",
    "read_only": 1,
    "print_hide": 1
   },

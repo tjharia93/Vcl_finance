@@ -221,13 +221,12 @@ def week_status(float_name, date):
     """For a given date + float, return the containing week's status WITHOUT creating it.
 
     Lets the entry wizard warn a custodian before they fill in an entry for a closed week.
-    The petty-cash week runs Mon–Sat, anchored to Friday as ``week_ending``.
-    Sunday is treated as the start of the coming week (next Friday).
+    The petty-cash week runs Sun–Sat, anchored to Saturday as ``week_ending``.
 
     Returns::
 
         {
-            "week_ending": "YYYY-MM-DD",   # Friday of the containing week
+            "week_ending": "YYYY-MM-DD",   # Saturday of the containing week
             "sheet": name_or_None,          # existing Petty Cash Sheet name, or None
             "status": "Draft"|"Closed"|"Submitted"|"Approved"|"New",
             "locked": bool,                 # True when status in Closed/Submitted/Approved
@@ -235,14 +234,12 @@ def week_status(float_name, date):
         }
     """
     d = getdate(date)
-    # Week runs Mon(0)–Sat(5), Friday(4) is the week_ending anchor.
-    # Saturday belongs to the same (just-past) Friday.
-    # Sunday opens the next week → next Friday.
+    # Week runs Sun–Sat; Saturday (weekday 5) is the week_ending anchor. For any
+    # day, roll forward to the Saturday that ends its Sun–Sat week. Python weekday:
+    # Mon=0 … Sat=5, Sun=6, so (5 - wd) % 7 lands on that Saturday (0 when d IS Sat,
+    # 6 when d is Sun → next Saturday, since Sunday opens a fresh week).
     wd = d.weekday()
-    if wd == 6:  # Sunday → coming week
-        week_ending = d + timedelta(days=5)
-    else:  # Mon–Sat: offset to the Friday of this week (negative for Sat → yesterday)
-        week_ending = d + timedelta(days=(4 - wd))
+    week_ending = d + timedelta(days=(5 - wd) % 7)
 
     _LOCKED = {"Closed", "Submitted", "Approved"}
     existing = frappe.db.get_value(
@@ -388,11 +385,11 @@ def quick_entry(sheet, kind, **fields):
 
     elif kind == "parking":
         day = fields.get("day_idx")
-        # Accept either an int 0-5 or a Mon..Sat string.
+        # Accept either an int 0-6 (Sun=0 … Sat=6) or a Sun..Sat string.
         if isinstance(day, str) and day.isdigit():
             day = int(day)
         if isinstance(day, int):
-            if day not in range(6):
+            if day not in range(7):
                 frappe.throw(_("Pick a day for the parking entry."))
             day = DAY_NAMES[day]
         if day not in DAY_NAMES:
@@ -547,7 +544,36 @@ def close_week(sheet, cash_count_end):
 
 
 @frappe.whitelist(methods=["POST"])
+def approve_week(sheet):
+    """Second, distinct sign-off after Close — fully locks the week.
+
+    Draft → Closed (reopenable) → Approved (still reopenable by an Accounts
+    Manager, but treated as locked for every non-AM write path). Requires the week
+    to already be Closed so the physical cash count / variance are settled first.
+    """
+    if not _is_accounts_manager():
+        frappe.throw("Only an Accounts Manager can approve a week.", frappe.PermissionError)
+    frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
+    doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    if doc.status != "Closed":
+        frappe.throw("A week must be Closed before it can be approved.")
+    doc.status = "Approved"
+    doc.approved_by = frappe.session.user
+    doc.approved_on = frappe.utils.now_datetime()
+    doc.save()
+    return {"name": doc.name, "status": doc.status,
+            "approved_by": doc.approved_by, "approved_on": str(doc.approved_on),
+            "expected_close": doc.expected_close,
+            "cash_count_end": doc.cash_count_end, "variance": doc.variance}
+
+
+@frappe.whitelist(methods=["POST"])
 def reopen_week(sheet):
+    """Re-open a Closed OR Approved week back to Draft (Accounts-Manager-only).
+
+    Clears both the close and the approval stamps so the audit trail reflects the
+    reopen honestly.
+    """
     if not _is_accounts_manager():
         frappe.throw("Only an Accounts Manager can reopen a week.", frappe.PermissionError)
     frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
@@ -555,6 +581,8 @@ def reopen_week(sheet):
     doc.status = "Draft"
     doc.closed_by = None
     doc.closed_on = None
+    doc.approved_by = None
+    doc.approved_on = None
     doc.save()
     return {"name": doc.name, "status": doc.status, "expected_close": doc.expected_close,
             "cash_count_end": doc.cash_count_end, "variance": doc.variance}

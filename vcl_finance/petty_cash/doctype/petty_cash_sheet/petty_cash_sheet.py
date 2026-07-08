@@ -6,7 +6,9 @@ from frappe.model.document import Document
 
 
 VEHICLES = ["KAP 466", "KAY 635", "KCB 430", "KBQ 788", "KBT 972"]
-DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+# Petty-cash week runs Sunday → Saturday (week_ending = Saturday). Day columns are
+# ordered Sun..Sat so the last column IS the week_ending anchor.
+DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 CATEGORY_CODES = ["TG", "TE", "SE", "OA", "FD", "GP", "OT"]
 VOUCHER_ROWS = 18
 WAGES_ROWS = 18
@@ -99,21 +101,21 @@ class PettyCashSheet(Document):
             return
         if self.backfill:
             # Historical sheets imported from the intranet keep their exact
-            # recorded week-ending even when it isn't a Friday. New sheets still
-            # enforce the Sat->Fri rule below.
+            # recorded week-ending even when it isn't a Saturday. New sheets still
+            # enforce the Sun->Sat rule below.
             return
         we = _as_date(self.week_ending)
-        if we.weekday() != 4:  # Friday
-            frappe.throw(_("Week Ending must be a Friday. Got {0} ({1}).").format(
-                we.isoformat(), DAY_NAMES[we.weekday() if we.weekday() < 6 else 5]
+        if we.weekday() != 5:  # Saturday
+            frappe.throw(_("Week Ending must be a Saturday. Got {0} ({1}).").format(
+                we.isoformat(), we.strftime("%a")
             ))
 
     def validate_unique_float(self):
         """Composite uniqueness on (week_ending, float).
 
         Frappe's per-field ``unique`` flag can't express a composite key, so we
-        enforce it here: reject a second non-cancelled sheet with the same Friday
-        and float. Cash and Hauz-Pay on the same Friday are allowed.
+        enforce it here: reject a second non-cancelled sheet with the same Saturday
+        and float. Cash and Hauz-Pay on the same Saturday are allowed.
         """
         if not self.week_ending or not self.float:
             return
@@ -297,10 +299,38 @@ def carry_forward(float_name="Cash", week_ending=None, before=None):
 
 @frappe.whitelist()
 def week_dates(week_ending):
-    """Mon–Sat ISO date strings for the week that ends on the given Friday."""
-    we = _as_date(week_ending)
-    monday = we - timedelta(days=4)
-    return [(monday + timedelta(days=i)).isoformat() for i in range(6)]
+    """Sun–Sat ISO date strings for the Sun–Sat week that CONTAINS ``week_ending``.
+
+    Derivation-only (never edits the doc): rolls the stored date forward to the
+    Saturday that ends its containing week, then walks back to Sunday. Works for
+    ANY stored week_ending — new Saturday-anchored sheets AND historical
+    Friday-anchored ones — so every sheet displays/prints as Sun–Sat without
+    touching its recorded week_ending or carry-forward chain.
+    """
+    d = _as_date(week_ending)
+    saturday = d + timedelta(days=(5 - d.weekday()) % 7)
+    sunday = saturday - timedelta(days=6)
+    return [(sunday + timedelta(days=i)).isoformat() for i in range(7)]
+
+
+@frappe.whitelist()
+def week_span(week_ending):
+    """The derived Sun–Sat span that CONTAINS ``week_ending`` — shared by the print
+    format + Compass UI so every sheet (historical Friday-anchored included) renders
+    a Sunday-start / Saturday-end week without editing the stored week_ending.
+
+    Returns ``{"sunday", "saturday", "week_no", "dates": [Sun..Sat]}``. ``saturday``
+    is the display/print week-ending; ``week_no`` is the ISO week of that Saturday.
+    """
+    d = _as_date(week_ending)
+    saturday = d + timedelta(days=(5 - d.weekday()) % 7)
+    sunday = saturday - timedelta(days=6)
+    return {
+        "sunday": sunday.isoformat(),
+        "saturday": saturday.isoformat(),
+        "week_no": saturday.isocalendar()[1],
+        "dates": [(sunday + timedelta(days=i)).isoformat() for i in range(7)],
+    }
 
 
 @frappe.whitelist()
@@ -368,7 +398,7 @@ def summary(name):
 
 @frappe.whitelist()
 def create_for_week(week_ending, custodian_name="Shiro", opening_balance=0, authorised_float=50000, float_name="Cash"):
-    """Convenience endpoint: create a new sheet for the given Friday + float, or return existing.
+    """Convenience endpoint: create a new sheet for the given Saturday + float, or return existing.
 
     Used by the Website Page "New Sheet" form so the custodian doesn't have to
     pick a Naming Series manually. Idempotent on the (week_ending, float) key.

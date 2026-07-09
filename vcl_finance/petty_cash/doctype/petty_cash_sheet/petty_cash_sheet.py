@@ -30,7 +30,35 @@ class PettyCashSheet(Document):
         self.validate_unique_float()
         self.derive_week_no()
         self.ensure_grid()
+        self.autosort_vouchers_by_date()
         self.compute_totals()
+
+    def autosort_vouchers_by_date(self):
+        """Re-number the Voucher Register so rows sit in transaction-date order.
+
+        Dated rows sort ascending. Undated rows (the blank grid rows and freshly
+        appended lines) sink to the bottom keeping their existing order, ready to
+        fill. Ties on the same date preserve the current row_idx, so saving twice
+        never reshuffles same-date rows.
+
+        Order is written to BOTH row_idx and idx: the Compass grid reads row_idx,
+        while the print format iterates the child table in idx order — they must
+        agree or the filing copy won't match what the editor shows.
+
+        Locked weeks (Closed / Submitted / Approved) are frozen: an already-filed
+        copy must never reorder under us.
+        """
+        if self.is_locked():
+            return
+
+        def sort_key(v):
+            d = _as_date(v.txn_date) if v.txn_date else None
+            return (d is None, d or date.max, v.row_idx or 0)
+
+        self.vouchers.sort(key=sort_key)
+        for new_idx, v in enumerate(self.vouchers, start=1):
+            v.row_idx = new_idx
+            v.idx = new_idx
 
     def guard_locked_write(self):
         """ORM-layer lock: a Closed/Submitted/Approved week may only be saved by an

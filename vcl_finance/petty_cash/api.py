@@ -21,7 +21,7 @@ from datetime import timedelta
 
 import frappe
 from frappe import _
-from frappe.utils import flt, getdate, add_days
+from frappe.utils import cint, flt, getdate, add_days
 
 from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import (
     VEHICLES, DAY_NAMES, CATEGORY_CODES,
@@ -124,6 +124,8 @@ def _feed_items(doc):
                 "direction": "out", "color": CAT_COLOR.get(code), "ticks": ticks,
                 "receipt": v.receipt or None,
                 "cancelled": bool(v.cancelled), "cancel_remark": v.cancel_remark or "",
+                "locked": bool(v.locked), "locked_by": v.locked_by or "",
+                "locked_on": str(v.locked_on) if v.locked_on else "",
             })
         if in_amt:
             items.append({
@@ -133,6 +135,8 @@ def _feed_items(doc):
                 "subtitle": v.voucher_no or "", "amount": in_amt, "direction": "in",
                 "color": CAT_COLOR["IN"], "ticks": ticks, "receipt": v.receipt or None,
                 "cancelled": bool(v.cancelled), "cancel_remark": v.cancel_remark or "",
+                "locked": bool(v.locked), "locked_by": v.locked_by or "",
+                "locked_on": str(v.locked_on) if v.locked_on else "",
             })
 
     for w in doc.wages_entries:
@@ -147,6 +151,8 @@ def _feed_items(doc):
             "subtitle": w.reason or w.staff_id or "", "amount": flt(w.amount), "direction": "out",
             "color": TYPE_COLOR.get(kind), "ticks": {"paye": bool(w.paye)}, "receipt": None,
             "cancelled": bool(w.cancelled), "cancel_remark": w.cancel_remark or "",
+            "locked": bool(w.locked), "locked_by": w.locked_by or "",
+            "locked_on": str(w.locked_on) if w.locked_on else "",
         })
 
     for l in doc.loan_entries:
@@ -160,6 +166,8 @@ def _feed_items(doc):
             "direction": "out", "color": TYPE_COLOR["loan"], "ticks": {"paye": bool(l.paye)},
             "receipt": None,
             "cancelled": bool(l.cancelled), "cancel_remark": l.cancel_remark or "",
+            "locked": bool(l.locked), "locked_by": l.locked_by or "",
+            "locked_on": str(l.locked_on) if l.locked_on else "",
         })
 
     for m in doc.misc_entries:
@@ -172,6 +180,8 @@ def _feed_items(doc):
             "notes": m.notes or "", "subtitle": m.notes or "", "amount": flt(m.amount),
             "direction": "out", "color": TYPE_COLOR.get(kind), "ticks": {}, "receipt": None,
             "cancelled": bool(m.cancelled), "cancel_remark": m.cancel_remark or "",
+            "locked": bool(m.locked), "locked_by": m.locked_by or "",
+            "locked_on": str(m.locked_on) if m.locked_on else "",
         })
 
     for p in doc.parking_entries:
@@ -185,6 +195,8 @@ def _feed_items(doc):
             "subtitle": p.vehicle or p.day_idx or "", "amount": flt(p.amount),
             "direction": "out", "color": TYPE_COLOR["parking"], "ticks": {}, "receipt": None,
             "cancelled": bool(p.cancelled), "cancel_remark": p.cancel_remark or "",
+            "locked": bool(p.locked), "locked_by": p.locked_by or "",
+            "locked_on": str(p.locked_on) if p.locked_on else "",
         })
 
     # Newest first: dated desc, undated sink under dated (stable by id).
@@ -216,6 +228,19 @@ def _assert_can_write(sheet):
     """Block edits to a locked week unless the caller is an Accounts Manager."""
     if sheet.is_locked() and not _is_accounts_manager():
         frappe.throw("This week is closed. Only an Accounts Manager can edit it.",
+                     frappe.PermissionError)
+
+
+def _assert_row_unlocked(row):
+    """Block a non-AM from touching a per-row-locked child entry.
+
+    ``PettyCashSheet.guard_locked_rows`` is the real enforcement (it also covers the
+    Compass grid's full-document REST save, which never reaches this module). This is
+    a cheap early check so the API call sites fail with the right message instead of
+    a diff-detected throw from deep inside validate().
+    """
+    if cint(row.get("locked")) and not _is_accounts_manager():
+        frappe.throw(_("This row is locked. Only an Accounts Manager can change it."),
                      frappe.PermissionError)
 
 
@@ -281,7 +306,12 @@ def _voucher_has_data(v):
 
 
 def _first_blank(rows, is_blank):
+    """First reusable scaffolding row. A locked row is never reused — even by an
+    Accounts Manager — because filling it in would silently rewrite a frozen line;
+    quick_entry appends a fresh row instead."""
     for r in rows:
+        if cint(r.get("locked")):
+            continue
         if is_blank(r):
             return r
     return None
@@ -482,6 +512,7 @@ def cancel_entry(sheet, entry_id, remark=None):
     table, row = _find_row(doc, entry_id)
     if row is None:
         frappe.throw(_("That entry no longer exists on this sheet."))
+    _assert_row_unlocked(row)
 
     row.cancelled = 1
     row.cancelled_on = frappe.utils.now_datetime()
@@ -502,6 +533,7 @@ def reinstate_entry(sheet, entry_id):
     table, row = _find_row(doc, entry_id)
     if row is None:
         frappe.throw(_("That entry no longer exists on this sheet."))
+    _assert_row_unlocked(row)
 
     row.cancelled = 0
     row.cancelled_on = None
@@ -531,6 +563,7 @@ def attach_receipt(sheet, voucher_name, file_url):
     row = next((v for v in doc.vouchers if v.name == voucher_name), None)
     if row is None:
         frappe.throw(_("Voucher row not found on this sheet."))
+    _assert_row_unlocked(row)
     row.receipt = file_url
     doc.save()
     return {"ok": True, "voucher_name": voucher_name, "receipt": file_url}

@@ -20,7 +20,10 @@
   "notes",
   "cancelled",
   "cancelled_on",
-  "cancel_remark"
+  "cancel_remark",
+  "locked",
+  "locked_by",
+  "locked_on"
  ],
  "fields": [
   {"fieldname": "row_idx", "fieldtype": "Int", "label": "Row", "in_list_view": 1, "columns": 1, "read_only": 1},
@@ -38,11 +41,14 @@
   {"fieldname": "notes", "fieldtype": "Small Text", "label": "Notes / Description"},
   {"fieldname": "cancelled", "fieldtype": "Check", "label": "Cancelled (void)", "default": "0", "description": "Voided entry — kept on the sheet for audit but excluded from all totals and posting."},
   {"fieldname": "cancelled_on", "fieldtype": "Datetime", "label": "Cancelled On", "read_only": 1},
-  {"fieldname": "cancel_remark", "fieldtype": "Small Text", "label": "Cancel Remark"}
+  {"fieldname": "cancel_remark", "fieldtype": "Small Text", "label": "Cancel Remark"},
+  {"fieldname": "locked", "fieldtype": "Check", "label": "Locked", "default": "0", "description": "Frozen row — still live and counted, but only an Accounts Manager can change, delete or unlock it. Distinct from Cancelled (void)."},
+  {"fieldname": "locked_by", "fieldtype": "Data", "label": "Locked By", "read_only": 1},
+  {"fieldname": "locked_on", "fieldtype": "Datetime", "label": "Locked On", "read_only": 1}
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-06-19 00:00:00",
+ "modified": "2026-07-09 00:00:00",
  "modified_by": "Administrator",
  "module": "Petty Cash",
  "name": "Petty Cash Voucher",

@@ -3,6 +3,7 @@ from datetime import date, datetime, timedelta
 import frappe
 from frappe import _
 from frappe.model.document import Document
+from frappe.utils import cint, flt, getdate
 
 
 VEHICLES = ["KAP 466", "KAY 635", "KCB 430", "KBQ 788", "KBT 972"]
@@ -16,6 +17,64 @@ LOAN_ROWS = 8
 BIKE_ROWS = 6
 FORKLIFT_ROWS = 4
 
+# Whoever may unlock a row (and edit / delete a locked one). Mirrors api.PETTY_PRIV.
+LOCK_OVERRIDE_ROLES = {"Accounts Manager", "System Manager"}
+
+# The user-meaningful fields the row lock protects, per child table, with the type
+# used to normalise each side before comparing.
+#
+# DELIBERATELY EXCLUDED: idx, row_idx, day_idx, slot — this controller rewrites all
+# four *itself* on every save (autosort_vouchers_by_date / autosort_parking_by_date
+# rewrite idx + row_idx; derive_parking_days rewrites day_idx + slot). Comparing
+# them would make the guard fire on an ordinary no-op re-save of any sheet holding
+# a locked row. Metadata (name/owner/creation/modified/parent*/docstatus/doctype)
+# is excluded for the same reason. `cancelled_on` / `cancel_remark` ride along with
+# `cancelled`, which IS compared.
+LOCK_COMPARE_FIELDS = {
+    "vouchers": (
+        ("txn_date", "date"), ("voucher_no", "text"), ("recipient", "text"),
+        ("category", "text"), ("amount", "money"), ("cash_in", "check"),
+        ("pc_received", "check"), ("etr_received", "check"), ("receipt", "text"),
+        ("notes", "text"), ("cancelled", "check"), ("locked", "check"),
+    ),
+    "wages_entries": (
+        ("txn_date", "date"), ("entry_type", "text"), ("recipient", "text"),
+        ("staff_id", "text"), ("reason", "text"), ("amount", "money"),
+        ("paye", "check"), ("recipient_signed", "check"),
+        ("authorised_signed", "check"), ("cancelled", "check"), ("locked", "check"),
+    ),
+    "loan_entries": (
+        ("txn_date", "date"), ("recipient", "text"), ("staff_id", "text"),
+        ("reason", "text"), ("amount_issued", "money"), ("amount_signed", "money"),
+        ("paye", "check"), ("cancelled", "check"), ("locked", "check"),
+    ),
+    "parking_entries": (
+        ("txn_date", "date"), ("vehicle", "text"), ("amount", "money"),
+        ("cancelled", "check"), ("locked", "check"),
+    ),
+    "misc_entries": (
+        ("kind", "text"), ("txn_date", "date"), ("amount", "money"),
+        ("recipient_signed", "check"), ("notes", "text"),
+        ("cancelled", "check"), ("locked", "check"),
+    ),
+}
+
+
+def _lock_norm(value, kind):
+    """Canonicalise one field value so a no-op round-trip never looks like a change.
+
+    The browser POSTs an ISO string where the DB holds a ``date``, ``0`` where the
+    DB holds ``None``, ``250.0`` where the DB holds ``Decimal("250.00")``. Compare
+    the meaning, not the representation.
+    """
+    if kind == "check":
+        return 1 if cint(value) else 0
+    if kind == "money":
+        return flt(value, 2)
+    if kind == "date":
+        return getdate(value) if value else None
+    return str(value).strip() if value is not None else ""
+
 
 class PettyCashSheet(Document):
     """Parent weekly petty-cash record. Owns the voucher / parking / misc / wages child tables."""
@@ -26,6 +85,11 @@ class PettyCashSheet(Document):
 
     def validate(self):
         self.guard_locked_write()
+        # MUST run before validate_week_ending / ensure_grid / derive_parking_days /
+        # the autosorts / compute_totals: those steps mutate the child rows
+        # themselves, so the incoming payload has to be compared against the DB
+        # state while it is still exactly what the client sent.
+        self.guard_locked_rows()
         self.validate_week_ending()
         self.validate_unique_float()
         self.derive_week_no()
@@ -108,10 +172,80 @@ class PettyCashSheet(Document):
         api._assert_can_write."""
         if self.is_new() or not self.is_locked():
             return
-        if set(frappe.get_roles()) & {"Accounts Manager", "System Manager"}:
+        if set(frappe.get_roles()) & LOCK_OVERRIDE_ROLES:
             return
         frappe.throw(_("This week is closed. Only an Accounts Manager can edit it."),
                      frappe.PermissionError)
+
+    def guard_locked_rows(self):
+        """ORM-layer per-ROW lock, orthogonal to the week-level ``guard_locked_write``.
+
+        A row with ``locked = 1`` is frozen: live, counted, and part of the sheet —
+        just immutable. The custodian may TICK a row to lock it; only an Accounts
+        Manager may untick it, edit it, or delete it.
+
+        This is the only real enforcement point. The Compass grid saves the FULL
+        document via the Frappe REST API, bypassing every ``api.py`` helper, so a
+        UI-only lock would be trivially defeated.
+
+        Rules, per child row, matched on the child ``name``:
+          - old row unlocked → anything goes, including ticking it locked;
+          - old row locked + Accounts Manager → anything goes, including unticking;
+          - old row locked + anyone else → the row must be byte-for-byte unchanged
+            across LOCK_COMPARE_FIELDS, and must still be present (no delete).
+
+        Stamps ``locked_by`` / ``locked_on`` on the 0 → 1 transition and clears them
+        on 1 → 0. A row that stays locked keeps its ORIGINAL stamp: the fields are
+        ``read_only`` in the UI only, so we restore them server-side rather than
+        trust whatever the client echoed back.
+        """
+        before = self.get_doc_before_save()
+        if before is None:
+            return  # insert: nothing to compare against, nothing can be locked yet
+
+        is_am = bool(set(frappe.get_roles()) & LOCK_OVERRIDE_ROLES)
+
+        for table, fields in LOCK_COMPARE_FIELDS.items():
+            old_rows = {r.name: r for r in (before.get(table) or []) if r.name}
+            new_rows = {r.name: r for r in (self.get(table) or []) if r.name}
+
+            for name, old in old_rows.items():
+                if not cint(old.get("locked")):
+                    continue  # unlocked yesterday → no protection today
+
+                new = new_rows.get(name)
+                if new is None:
+                    if is_am:
+                        continue  # an Accounts Manager may remove a locked row
+                    frappe.throw(
+                        _("This row is locked and cannot be deleted. "
+                          "Only an Accounts Manager can remove it."),
+                        frappe.PermissionError,
+                    )
+                if is_am:
+                    continue
+
+                for fieldname, kind in fields:
+                    if _lock_norm(old.get(fieldname), kind) != _lock_norm(new.get(fieldname), kind):
+                        frappe.throw(
+                            _("This row is locked. Only an Accounts Manager can change it."),
+                            frappe.PermissionError,
+                        )
+                # Unchanged, so still locked — pin the original stamp back on.
+                new.locked_by = old.locked_by
+                new.locked_on = old.locked_on
+
+            for name, new in new_rows.items():
+                was_locked = cint(old_rows[name].get("locked")) if name in old_rows else 0
+                now_locked = cint(new.get("locked"))
+                if now_locked and not was_locked:
+                    new.locked_by = frappe.session.user
+                    new.locked_on = frappe.utils.now()
+                elif was_locked and not now_locked:
+                    # Only reachable for an Accounts Manager — the loop above throws
+                    # for anyone else before we get here.
+                    new.locked_by = None
+                    new.locked_on = None
 
     def check_if_locked(self):
         # Frappe Cloud's shared filesystem can leave a "phantom" document lock:

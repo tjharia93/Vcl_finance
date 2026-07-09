@@ -30,8 +30,50 @@ class PettyCashSheet(Document):
         self.validate_unique_float()
         self.derive_week_no()
         self.ensure_grid()
+        self.derive_parking_days()
         self.autosort_vouchers_by_date()
+        self.autosort_parking_by_date()
         self.compute_totals()
+
+    def derive_parking_days(self):
+        """Keep ``day_idx`` in lockstep with ``txn_date`` on every parking row.
+
+        Parking is captured as dated single entries (like the Voucher Register) —
+        the custodian never picks a weekday. The weekly print format still buckets
+        parking into a Sun..Sat × vehicle grid off ``day_idx``, so every row MUST
+        carry one of DAY_NAMES or its money silently vanishes from the filing copy.
+
+        Rules, in order:
+          - ``txn_date`` set  → day_idx = that date's day name (always in DAY_NAMES);
+          - legacy undated row → its existing day_idx is left untouched;
+          - neither            → fall back to the week-ending day so the row still prints.
+
+        ``slot`` is legacy (the old 2-slots-per-day grid). New rows keep 1 so any
+        code path that reads it sees a number rather than None.
+        """
+        for p in self.parking_entries:
+            if p.txn_date:
+                # Python weekday(): Mon=0 … Sun=6. DAY_NAMES is Sun-first, so shift by one.
+                p.day_idx = DAY_NAMES[(_as_date(p.txn_date).weekday() + 1) % 7]
+            elif p.day_idx not in DAY_NAMES:
+                p.day_idx = DAY_NAMES[-1]
+            if not p.slot:
+                p.slot = 1
+
+    def autosort_parking_by_date(self):
+        """Parking rows sit in transaction-date order — same semantics as the
+        Voucher Register: dated ascending, undated last keeping their order, ties
+        stable on current idx. Frozen once the week is locked."""
+        if self.is_locked():
+            return
+
+        def sort_key(p):
+            d = _as_date(p.txn_date) if p.txn_date else None
+            return (d is None, d or date.max, p.idx or 0)
+
+        self.parking_entries.sort(key=sort_key)
+        for new_idx, p in enumerate(self.parking_entries, start=1):
+            p.idx = new_idx
 
     def autosort_vouchers_by_date(self):
         """Re-number the Voucher Register so rows sit in transaction-date order.
@@ -176,6 +218,11 @@ class PettyCashSheet(Document):
         """Idempotently back-fill empty child rows so the editor UI renders cleanly.
 
         Skips on submitted documents so they stay frozen.
+
+        Parking is deliberately absent: parking rows are dated single entries created
+        on demand (like vouchers), not a pre-scaffolded 7×5×2 grid. Blank parking rows
+        left on existing sheets by the old scaffolding are harmless (amount 0) and are
+        never deleted here.
         """
         if self.docstatus == 1:
             return
@@ -185,19 +232,6 @@ class PettyCashSheet(Document):
         for i in range(1, VOUCHER_ROWS + 1):
             if i not in existing:
                 self.append("vouchers", {"row_idx": i})
-
-        # Parking — 6 days × 5 vehicles × 2 slots
-        existing_parking = {(p.day_idx, p.vehicle, p.slot) for p in self.parking_entries}
-        for d_idx, d_name in enumerate(DAY_NAMES):
-            for vehicle in VEHICLES:
-                for slot in (1, 2):
-                    if (d_name, vehicle, slot) not in existing_parking:
-                        self.append("parking_entries", {
-                            "day_idx": d_name,
-                            "vehicle": vehicle,
-                            "slot": slot,
-                            "amount": 0,
-                        })
 
         # Misc — 6 bike + 4 forklift
         existing_bike = {(m.kind, m.row_idx) for m in self.misc_entries if m.kind == "Bike Fuel"}

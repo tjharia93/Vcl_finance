@@ -5,6 +5,7 @@
  "editable_grid": 1,
  "engine": "InnoDB",
  "field_order": [
+  "txn_date",
   "day_idx",
   "vehicle",
   "slot",
@@ -15,7 +16,16 @@
  ],
  "fields": [
   {
+   "columns": 2,
+   "description": "Date the parking was paid. Leave blank only on legacy rows recorded against a weekday alone.",
+   "fieldname": "txn_date",
+   "fieldtype": "Date",
+   "in_list_view": 1,
+   "label": "Date"
+  },
+  {
    "columns": 1,
+   "description": "Derived from Date on every save. Only legacy (undated) rows keep a typed day.",
    "fieldname": "day_idx",
    "fieldtype": "Select",
    "in_list_view": 1,
@@ -33,14 +43,12 @@
    "reqd": 1
   },
   {
-   "columns": 1,
    "default": "1",
+   "description": "Legacy slot number from the 2-slots-per-day grid. Unused by new dated rows.",
    "fieldname": "slot",
    "fieldtype": "Int",
-   "in_list_view": 1,
-   "label": "Slot (1 or 2)",
-   "non_negative": 1,
-   "reqd": 1
+   "label": "Slot (legacy)",
+   "non_negative": 1
   },
   {
    "columns": 2,

@@ -1,16 +1,18 @@
 """Whitelisted JSON API for the keypad entry wizard (Phase 2).
 
-``quick_entry`` appends ONE line to the right child table of an open sheet (the
-grid is pre-seeded with blank rows by ``ensure_grid``, so we normally just fill
-the first empty one). ``get_feed`` returns the running feed + live balance the
-wizard renders. ``attach_receipt`` sets a voucher row's ``receipt`` (Attach Image)
-from an already-uploaded Frappe File.
+``quick_entry`` appends ONE line to the right child table of an open sheet (voucher /
+wages / loan / misc grids are pre-seeded with blank rows by ``ensure_grid``, so we
+normally just fill the first empty one; parking rows are created on demand).
+``get_feed`` returns the running feed + live balance the wizard renders.
+``attach_receipt`` sets a voucher row's ``receipt`` (Attach Image) from an
+already-uploaded Frappe File.
 
 Ported from the prototype's ``routes/api.py`` (quick-entry) and
 ``routes/sheets.py`` (``_feed_items`` / ``_summary``), adapted to the Frappe field
 names: voucher ``category`` Select + ``cash_in`` Check; wages ``entry_type``
 Wage/Overtime/Piecework/Commission; loans ``amount_issued``/``amount_signed``;
-parking ``day_idx`` Mon..Sat string; misc ``kind`` "Bike Fuel"/"Forklift".
+parking ``txn_date`` + ``vehicle`` (``day_idx`` is derived server-side); misc
+``kind`` "Bike Fuel"/"Forklift".
 
 Everything recomputes server-side — client amounts are never trusted for totals.
 """
@@ -177,9 +179,10 @@ def _feed_items(doc):
             continue
         items.append({
             "id": p.name, "kind": "parking", "section": "parking", "row_idx": None,
-            "day_idx": p.day_idx, "vehicle": p.vehicle, "slot": p.slot, "date": None,
+            "day_idx": p.day_idx, "vehicle": p.vehicle, "slot": p.slot,
+            "date": _date_str(p.txn_date),
             "label": "Parking", "recipient": p.vehicle,
-            "subtitle": f"{p.day_idx} · slot {p.slot}", "amount": flt(p.amount),
+            "subtitle": p.vehicle or p.day_idx or "", "amount": flt(p.amount),
             "direction": "out", "color": TYPE_COLOR["parking"], "ticks": {}, "receipt": None,
             "cancelled": bool(p.cancelled), "cancel_remark": p.cancel_remark or "",
         })
@@ -288,6 +291,19 @@ def _next_idx(rows):
     return (max((r.row_idx or 0) for r in rows) + 1) if rows else 1
 
 
+def _legacy_day(day):
+    """Back-compat only: normalise a client-supplied day to a DAY_NAMES entry.
+
+    Accepts an int / numeric string 0-6 (Sun=0 … Sat=6) or a "Sun".."Sat" string.
+    Returns None when it isn't a valid day — new clients send a date instead.
+    """
+    if isinstance(day, str) and day.isdigit():
+        day = int(day)
+    if isinstance(day, int):
+        return DAY_NAMES[day] if day in range(7) else None
+    return day if day in DAY_NAMES else None
+
+
 @frappe.whitelist()
 def quick_entry(sheet, kind, **fields):
     """Append ONE line to the right child table of an open (Draft) sheet.
@@ -384,29 +400,21 @@ def quick_entry(sheet, kind, **fields):
         target.notes = fields.get("notes") or ""
 
     elif kind == "parking":
-        day = fields.get("day_idx")
-        # Accept either an int 0-6 (Sun=0 … Sat=6) or a Sun..Sat string.
-        if isinstance(day, str) and day.isdigit():
-            day = int(day)
-        if isinstance(day, int):
-            if day not in range(7):
-                frappe.throw(_("Pick a day for the parking entry."))
-            day = DAY_NAMES[day]
-        if day not in DAY_NAMES:
-            frappe.throw(_("Pick a day for the parking entry."))
+        # Parking is a dated single entry: Date + Vehicle + Amount. `day_idx` is
+        # derived from txn_date by the controller — the client never picks a weekday.
+        # Older clients still POST day_idx; it is only honoured when no date came with it.
         vehicle = fields.get("vehicle")
         if vehicle not in VEHICLES:
             frappe.throw(_("Pick a vehicle for the parking entry."))
-        slots = sorted(
-            [p for p in doc.parking_entries if p.day_idx == day and p.vehicle == vehicle],
-            key=lambda x: x.slot or 0,
-        )
-        target = _first_blank(slots, lambda p: not flt(p.amount))
-        if target is None:
-            frappe.throw(_(
-                "Both parking slots for {0} on {1} are already used."
-            ).format(vehicle, day))
-        target.amount = amount
+        row = {"vehicle": vehicle, "amount": amount, "slot": 1}
+        if txn_date:
+            row["txn_date"] = txn_date
+        else:
+            day = _legacy_day(fields.get("day_idx"))
+            if day is None:
+                frappe.throw(_("Pick a date for the parking entry."))
+            row["day_idx"] = day
+        target = doc.append("parking_entries", row)
 
     else:
         frappe.throw(_("Unknown entry kind '{0}'.").format(kind))
@@ -766,7 +774,7 @@ def petty_cash_analytics(period="8"):
             amt = flt(p.amount)
             if p.cancelled:
                 if amt:
-                    _void(amt, "parking", f"Parking · {p.vehicle}", None, p.cancel_remark, p.cancelled_on)
+                    _void(amt, "parking", f"Parking · {p.vehicle}", p.txn_date, p.cancel_remark, p.cancelled_on)
                 continue
             if amt:
                 sections["parking"] += amt; total_out += amt; fl["out"] += amt; wk["out"] += amt

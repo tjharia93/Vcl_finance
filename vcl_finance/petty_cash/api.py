@@ -1,6 +1,7 @@
 """Whitelisted JSON API for the keypad entry wizard (Phase 2).
 
-``quick_entry`` appends ONE line to the right child table of an open sheet (voucher /
+``quick_entry`` appends ONE line to the right child table of the sheet whose Sun–Sat
+week CONTAINS the entry's ``txn_date`` — NOT necessarily the sheet passed in (voucher /
 wages / loan / misc grids are pre-seeded with blank rows by ``ensure_grid``, so we
 normally just fill the first empty one; parking rows are created on demand).
 ``get_feed`` returns the running feed + live balance the wizard renders.
@@ -17,14 +18,13 @@ parking ``txn_date`` + ``vehicle`` (``day_idx`` is derived server-side); misc
 Everything recomputes server-side — client amounts are never trusted for totals.
 """
 import json
-from datetime import timedelta
 
 import frappe
 from frappe import _
 from frappe.utils import cint, flt, getdate, add_days
 
 from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import (
-    VEHICLES, DAY_NAMES, CATEGORY_CODES,
+    VEHICLES, DAY_NAMES, CATEGORY_CODES, week_saturday, create_for_week,
 )
 
 # Wizard kind → display label + colour for the running feed (brand vars resolved
@@ -261,13 +261,8 @@ def week_status(float_name, date):
             "is_accounts_manager": bool,    # whether the caller may override a lock
         }
     """
-    d = getdate(date)
-    # Week runs Sun–Sat; Saturday (weekday 5) is the week_ending anchor. For any
-    # day, roll forward to the Saturday that ends its Sun–Sat week. Python weekday:
-    # Mon=0 … Sat=5, Sun=6, so (5 - wd) % 7 lands on that Saturday (0 when d IS Sat,
-    # 6 when d is Sun → next Saturday, since Sunday opens a fresh week).
-    wd = d.weekday()
-    week_ending = d + timedelta(days=(5 - wd) % 7)
+    # Week runs Sun–Sat; Saturday is the week_ending anchor (see week_saturday).
+    week_ending = week_saturday(getdate(date))
 
     _LOCKED = {"Closed", "Submitted", "Approved"}
     existing = frappe.db.get_value(
@@ -334,24 +329,78 @@ def _legacy_day(day):
     return day if day in DAY_NAMES else None
 
 
+def _route_to_week(anchor, txn_date):
+    """Resolve the sheet a ``txn_date`` actually belongs to, for ``anchor``'s float.
+
+    The week a transaction belongs to is the Sun–Sat week that CONTAINS its date —
+    never "whichever sheet was open when it was typed in". Recording Sat 04/07 while
+    the 05/07–11/07 sheet is open must land on the sheet ending 04/07.
+
+    Find-or-create, so a custodian entering Sunday's spend on Monday morning still
+    gets a sheet (created via ``create_for_week``, which carries the opening balance
+    forward). Returns ``(doc, rerouted)`` — ``doc`` is ``anchor`` untouched when the
+    date already falls in its week, or when no date was supplied (legacy callers,
+    and the undated ``day_idx`` parking path).
+    """
+    if not txn_date:
+        return anchor, False
+
+    want = week_saturday(txn_date)
+    # The anchor's OWN week is derived the same way, so a historical Friday-anchored
+    # backfill sheet still recognises its own Sun–Sat dates and is never rerouted.
+    have = week_saturday(getdate(anchor.week_ending)) if anchor.week_ending else None
+    if have == want:
+        return anchor, False
+
+    name = frappe.db.get_value(
+        "Petty Cash Sheet",
+        {"week_ending": want, "float": anchor.float, "docstatus": ("<", 2)},
+        "name",
+    ) or create_for_week(
+        week_ending=want,
+        float_name=anchor.float,
+        custodian_name=anchor.custodian_name or "Shiro",
+        authorised_float=anchor.authorised_float or 50000,
+    )
+    if name == anchor.name:
+        return anchor, False
+    return frappe.get_doc("Petty Cash Sheet", name), True
+
+
 @frappe.whitelist()
 def quick_entry(sheet, kind, **fields):
-    """Append ONE line to the right child table of an open (Draft) sheet.
+    """Append ONE line to the child table of the sheet whose week CONTAINS ``txn_date``.
+
+    ``sheet`` is only the STARTING POINT (it fixes the float): the transaction date
+    decides the week. When the date falls outside that sheet's Sun–Sat span the entry
+    is written to the correct week's sheet instead (created if it doesn't exist), and
+    the sheet actually used comes back in ``sheet`` / ``rerouted`` so the client can
+    follow. Callers that send no date keep the old behaviour and post to ``sheet``.
 
     Rejects Submitted/Approved/cancelled sheets. ``kind`` is one of:
     voucher | wage | commission | piecework | loan | bike | forklift | parking.
-    Returns ``{entry_id, row_idx, kind, summary}``.
+    Returns ``{sheet, rerouted, week_ending, entry_id, row_idx, kind, summary}``.
     """
-    if not frappe.has_permission("Petty Cash Sheet", "write", sheet):
+    if not frappe.has_permission("Petty Cash Sheet", "read", sheet):
         frappe.throw(_("Not permitted."), frappe.PermissionError)
-
-    doc = frappe.get_doc("Petty Cash Sheet", sheet)
-    _assert_can_write(doc)
-    if doc.docstatus != 0 or doc.status in ("Submitted", "Approved"):
-        frappe.throw(_("That week is closed — re-open it before adding entries."))
 
     kind = (kind or "").lower()
     txn_date = getdate(fields.get("txn_date")) if fields.get("txn_date") else None
+
+    anchor = frappe.get_doc("Petty Cash Sheet", sheet)
+    doc, rerouted = _route_to_week(anchor, txn_date)
+
+    if not frappe.has_permission("Petty Cash Sheet", "write", doc.name):
+        frappe.throw(_("Not permitted."), frappe.PermissionError)
+    _assert_can_write(doc)
+    if doc.docstatus != 0 or doc.status in ("Submitted", "Approved"):
+        if rerouted:
+            frappe.throw(_(
+                "That date belongs to the week ending {0}, which is closed — "
+                "re-open it before adding entries."
+            ).format(getdate(doc.week_ending).strftime("%d/%m/%Y")))
+        frappe.throw(_("That week is closed — re-open it before adding entries."))
+
     amount = flt(fields.get("amount"))
     target = None
 
@@ -455,7 +504,12 @@ def quick_entry(sheet, kind, **fields):
     summ = _summary(doc)
     return {
         "ok": True,
+        # The sheet ACTUALLY written to — differs from the requested one when the
+        # date routed the entry to another week. `summary` belongs to this sheet.
         "sheet": doc.name,
+        "requested_sheet": anchor.name,
+        "rerouted": rerouted,
+        "week_ending": str(doc.week_ending),
         "kind": kind,
         "entry_id": target.name,
         "row_idx": getattr(target, "row_idx", None),

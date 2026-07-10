@@ -60,6 +60,35 @@ LOCK_COMPARE_FIELDS = {
 }
 
 
+# Every child table that carries a `txn_date`, with the label + amount field used
+# when validate_row_weeks() names an offending row.
+DATED_TABLES = (
+    ("vouchers", "Voucher", "amount"),
+    ("wages_entries", "Wages", "amount"),
+    ("loan_entries", "Loan", "amount_issued"),
+    ("misc_entries", "Misc", "amount"),
+    ("parking_entries", "Parking", "amount"),
+)
+
+
+def week_saturday(d):
+    """The Saturday that ENDS the Sun–Sat week CONTAINING ``d``.
+
+    Python weekday(): Mon=0 … Sat=5, Sun=6, so ``(5 - wd) % 7`` is 0 when ``d`` IS
+    a Saturday and 6 when it's a Sunday (which opens a fresh week). This is the
+    single definition of "which week does this date belong to" — week_dates,
+    week_span, validate_row_weeks and api.quick_entry all route through it.
+    """
+    d = _as_date(d)
+    return d + timedelta(days=(5 - d.weekday()) % 7)
+
+
+def week_bounds(d):
+    """(sunday, saturday) of the Sun–Sat week containing ``d``."""
+    sat = week_saturday(d)
+    return sat - timedelta(days=6), sat
+
+
 def _lock_norm(value, kind):
     """Canonicalise one field value so a no-op round-trip never looks like a change.
 
@@ -90,6 +119,9 @@ class PettyCashSheet(Document):
         # themselves, so the incoming payload has to be compared against the DB
         # state while it is still exactly what the client sent.
         self.guard_locked_rows()
+        # Same reason, same window: compare the INCOMING dates against the DB state
+        # before ensure_grid / derive_parking_days / the autosorts touch any row.
+        self.validate_row_weeks()
         self.validate_week_ending()
         self.validate_unique_float()
         self.derive_week_no()
@@ -246,6 +278,57 @@ class PettyCashSheet(Document):
                     # for anyone else before we get here.
                     new.locked_by = None
                     new.locked_on = None
+
+    def validate_row_weeks(self):
+        """A dated child row must fall inside this sheet's Sun–Sat span.
+
+        A transaction belongs to the week that CONTAINS its date, never to the week
+        that happened to be open when the custodian typed it in. Recording Sat 04/07
+        on the sheet ending 11/07 files the money in the wrong week and duplicates
+        it against the sheet that already holds it.
+
+        SCOPE — only rows that are NEW or whose ``txn_date`` CHANGED in this save.
+        Sheets already carrying an out-of-week row (PCS-2026-00018 holds 12) must
+        stay saveable: a blanket check would brick them, and their cleanup is a
+        separate, approval-gated job. So we diff against ``get_doc_before_save()``
+        and grandfather every dated row we aren't touching. On insert there's
+        nothing to diff against, so every dated row is checked.
+
+        Skips undated rows (the blank scaffolding, legacy day_idx parking) and
+        cancelled rows.
+        """
+        if not self.week_ending or self.docstatus == 2:
+            return
+        sunday, saturday = week_bounds(self.week_ending)
+        before = self.get_doc_before_save()
+
+        for table, label, amount_field in DATED_TABLES:
+            old_rows = {r.name: r for r in (before.get(table) or []) if r.name} if before else {}
+
+            for row in (self.get(table) or []):
+                if cint(row.get("cancelled")) or not row.get("txn_date"):
+                    continue
+                d = getdate(row.get("txn_date"))
+
+                old = old_rows.get(row.name) if row.name else None
+                if old is not None:
+                    old_d = getdate(old.txn_date) if old.txn_date else None
+                    if old_d == d:
+                        continue  # pre-existing date, untouched → grandfathered
+
+                if sunday <= d <= saturday:
+                    continue
+
+                frappe.throw(_(
+                    "{0} row dated {1} ({2} · KES {3}) does not belong to this week "
+                    "({4} – {5}). It belongs to the sheet for the week ending {6} — "
+                    "record it there."
+                ).format(
+                    label, d.strftime("%d/%m/%Y"), _row_who(table, row),
+                    "{:,.2f}".format(flt(row.get(amount_field), 2)),
+                    sunday.strftime("%d/%m/%Y"), saturday.strftime("%d/%m/%Y"),
+                    week_saturday(d).strftime("%d/%m/%Y"),
+                ), title=_("Entry is in the wrong week"))
 
     def check_if_locked(self):
         # Frappe Cloud's shared filesystem can leave a "phantom" document lock:
@@ -435,6 +518,16 @@ def _as_date(v):
     return datetime.fromisoformat(str(v)).date()
 
 
+def _row_who(table, row):
+    """Who/what a child row is about — for error messages. Parking has a vehicle,
+    misc has a kind + notes, everything else has a recipient."""
+    if table == "parking_entries":
+        return row.get("vehicle") or "parking"
+    if table == "misc_entries":
+        return (row.get("kind") or "misc") + (f" · {row.get('notes')}" if row.get("notes") else "")
+    return (row.get("recipient") or "").strip() or (row.get("voucher_no") or "").strip() or "no recipient"
+
+
 def _closing_cash(doc):
     """The cash to carry out of a sheet → (balance, basis).
 
@@ -503,9 +596,7 @@ def week_dates(week_ending):
     Friday-anchored ones — so every sheet displays/prints as Sun–Sat without
     touching its recorded week_ending or carry-forward chain.
     """
-    d = _as_date(week_ending)
-    saturday = d + timedelta(days=(5 - d.weekday()) % 7)
-    sunday = saturday - timedelta(days=6)
+    sunday, _saturday = week_bounds(week_ending)
     return [(sunday + timedelta(days=i)).isoformat() for i in range(7)]
 
 
@@ -518,9 +609,7 @@ def week_span(week_ending):
     Returns ``{"sunday", "saturday", "week_no", "dates": [Sun..Sat]}``. ``saturday``
     is the display/print week-ending; ``week_no`` is the ISO week of that Saturday.
     """
-    d = _as_date(week_ending)
-    saturday = d + timedelta(days=(5 - d.weekday()) % 7)
-    sunday = saturday - timedelta(days=6)
+    sunday, saturday = week_bounds(week_ending)
     return {
         "sunday": sunday.isoformat(),
         "saturday": saturday.isoformat(),

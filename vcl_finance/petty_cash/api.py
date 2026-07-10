@@ -227,8 +227,10 @@ def _is_accounts_manager():
 def _assert_can_write(sheet):
     """Block edits to a locked week unless the caller is an Accounts Manager."""
     if sheet.is_locked() and not _is_accounts_manager():
-        frappe.throw("This week is closed. Only an Accounts Manager can edit it.",
-                     frappe.PermissionError)
+        frappe.throw(
+            _("The week ending {0} is closed. Please speak to Finance to have this "
+              "entry posted.").format(frappe.format_value(sheet.week_ending, {"fieldtype": "Date"})),
+            frappe.PermissionError)
 
 
 def _assert_row_unlocked(row):
@@ -343,7 +345,11 @@ def _route_to_week(anchor, txn_date):
     and the undated ``day_idx`` parking path).
     """
     if not txn_date:
-        return anchor, False
+        # A date is not optional: the week is derived from it. There is no sensible
+        # "today's week" fallback — that is exactly how Sat 04/07 lines ended up on
+        # the 05/07–11/07 sheet and duplicated Wk 27.
+        frappe.throw(_("A date is required. The week an entry belongs to is derived "
+                       "from its date."))
 
     want = week_saturday(txn_date)
     # The anchor's OWN week is derived the same way, so a historical Friday-anchored
@@ -385,7 +391,9 @@ def quick_entry(sheet, kind, **fields):
         frappe.throw(_("Not permitted."), frappe.PermissionError)
 
     kind = (kind or "").lower()
-    txn_date = getdate(fields.get("txn_date")) if fields.get("txn_date") else None
+    if not fields.get("txn_date"):
+        frappe.throw(_("A date is required for every entry."))
+    txn_date = getdate(fields.get("txn_date"))
 
     anchor = frappe.get_doc("Petty Cash Sheet", sheet)
     doc, rerouted = _route_to_week(anchor, txn_date)

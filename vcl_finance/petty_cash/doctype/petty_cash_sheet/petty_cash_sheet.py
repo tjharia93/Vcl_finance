@@ -306,11 +306,36 @@ class PettyCashSheet(Document):
             old_rows = {r.name: r for r in (before.get(table) or []) if r.name} if before else {}
 
             for row in (self.get(table) or []):
-                if cint(row.get("cancelled")) or not row.get("txn_date"):
+                if cint(row.get("cancelled")):
                     continue
-                d = getdate(row.get("txn_date"))
 
                 old = old_rows.get(row.name) if row.name else None
+
+                if not row.get("txn_date"):
+                    # A line that carries money MUST be dated — the week is derived
+                    # from the date, so an undated line has no week. But two kinds of
+                    # undated row are legitimate and must never throw:
+                    #   * the blank rows ensure_grid() scaffolds (no money on them);
+                    #   * legacy parking rows recorded against a weekday alone, before
+                    #     txn_date existed (PCS-2026-00016 holds 16 with money on them).
+                    # So only NEW or newly-funded rows are required to carry a date.
+                    if not flt(row.get(amount_field)):
+                        continue
+                    if (old is not None and not old.get("txn_date")
+                            and flt(old.get(amount_field))
+                            and flt(old.get(amount_field)) == flt(row.get(amount_field))):
+                        # An ALREADY-FUNDED undated legacy row, left untouched. Grandfathered.
+                        # A blank scaffold row that GAINS money, or a legacy row whose amount
+                        # is edited, is a new fact and must carry a date.
+                        continue
+                    frappe.throw(_(
+                        "{0} row for {1} (KES {2}) has no date. Every entry needs a "
+                        "date — the week it belongs to is derived from it."
+                    ).format(label, row.get("recipient") or "\u2014",
+                             frappe.format_value(flt(row.get(amount_field)), {"fieldtype": "Currency"})))
+
+                d = getdate(row.get("txn_date"))
+
                 if old is not None:
                     old_d = getdate(old.txn_date) if old.txn_date else None
                     if old_d == d:

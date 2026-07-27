@@ -116,6 +116,12 @@ def daily_position(position_date: str | None = None):
                 "ref": l.account_ref,
                 "group": l.position_group,
                 "bank": _bal(l, "bank_balance", "bank_present"),
+                # What can actually be drawn today. Distinct from `bank` by
+                # 1.85M across the KES accounts, so the card leads with this and
+                # shows `bank` as the actual beneath it.
+                "bank_available": _bal(l, "bank_available", "bank_available_present"),
+                "bank_source": l.bank_source or None,
+                "bank_as_at": l.bank_as_at or None,
                 "qbo": _bal(l, "qbo_balance", "qbo_present"),
                 "erp": _bal(l, "erp_balance", "erp_present"),
                 "status": l.status,
@@ -126,6 +132,7 @@ def daily_position(position_date: str | None = None):
         "covered": {
             "accounts": doc.covered_accounts or 0,
             "bank": float(doc.covered_bank or 0),
+            "bank_available": float(doc.covered_bank_available or 0),
             "qbo": float(doc.covered_qbo or 0),
             "erp": float(doc.covered_erp or 0),
             "variance": float(doc.covered_variance or 0),
@@ -164,6 +171,7 @@ def record_position(payload):
     doc.currency = payload.get("currency") or "KES"
     doc.covered_accounts = cov.get("accounts") or 0
     doc.covered_bank = cov.get("bank") or 0
+    doc.covered_bank_available = cov.get("bank_available") or 0
     doc.covered_qbo = cov.get("qbo") or 0
     doc.covered_erp = cov.get("erp") or 0
     doc.covered_variance = cov.get("variance") or 0
@@ -182,6 +190,13 @@ def record_position(payload):
             "position_group": r.get("group"),
             "bank_balance": r.get("bank") or 0,
             "bank_present": 1 if r.get("bank") is not None else 0,
+            # Baroda USD carries no Available in the tracker, so `is not None`
+            # rather than truthiness — a genuine 0.00 must stay a zero and a
+            # missing figure must stay blank.
+            "bank_available": r.get("bank_available") or 0,
+            "bank_available_present": 1 if r.get("bank_available") is not None else 0,
+            "bank_source": r.get("bank_source"),
+            "bank_as_at": r.get("bank_as_at"),
             "qbo_balance": r.get("qbo") or 0,
             "qbo_present": 1 if r.get("qbo") is not None else 0,
             "erp_balance": r.get("erp") or 0,

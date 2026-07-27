@@ -23,21 +23,121 @@
   "line_note"
  ],
  "fields": [
-  {"fieldname": "account_key", "fieldtype": "Data", "label": "Key", "reqd": 1, "description": "Stable identifier the Compass card selects on (bob_kes, coop, abc, mpesa…). Never renamed."},
-  {"fieldname": "account", "fieldtype": "Data", "label": "Account", "reqd": 1, "in_list_view": 1},
-  {"fieldname": "short_label", "fieldtype": "Data", "label": "Short Label", "description": "Card-width name, e.g. 'Baroda'."},
-  {"fieldname": "account_ref", "fieldtype": "Data", "label": "Reference", "description": "Bank a/c number · QBO account id."},
-  {"fieldname": "position_group", "fieldtype": "Select", "label": "Group", "options": "bank\ncash\nloan", "reqd": 1, "in_list_view": 1},
-  {"fieldname": "column_break_amounts", "fieldtype": "Column Break"},
-  {"fieldname": "bank_balance", "fieldtype": "Currency", "label": "Bank Statement", "in_list_view": 1},
-  {"fieldname": "bank_present", "fieldtype": "Check", "label": "Bank Sourced", "default": "0", "description": "0 = there is no current statement for this account. A zero balance and no source are different facts and must not both read as 0."},
-  {"fieldname": "qbo_balance", "fieldtype": "Currency", "label": "QuickBooks", "in_list_view": 1},
-  {"fieldname": "qbo_present", "fieldtype": "Check", "label": "QBO Sourced", "default": "0"},
-  {"fieldname": "erp_balance", "fieldtype": "Currency", "label": "ERPNext"},
-  {"fieldname": "erp_present", "fieldtype": "Check", "label": "ERP Sourced", "default": "0"},
-  {"fieldname": "column_break_status", "fieldtype": "Column Break"},
-  {"fieldname": "status", "fieldtype": "Select", "label": "Status", "options": "open\nties\nno_statement\nstale\nnot_in_erp\nbooks_differ\nunallocated", "reqd": 1},
-  {"fieldname": "line_note", "fieldtype": "Data", "label": "Note"}
+  {
+   "fieldname": "account_key",
+   "fieldtype": "Data",
+   "label": "Key",
+   "reqd": 1,
+   "description": "Stable identifier the Compass card selects on (bob_kes, coop, abc, mpesa\u2026). Never renamed."
+  },
+  {
+   "fieldname": "account",
+   "fieldtype": "Data",
+   "label": "Account",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "short_label",
+   "fieldtype": "Data",
+   "label": "Short Label",
+   "description": "Card-width name, e.g. 'Baroda'."
+  },
+  {
+   "fieldname": "account_ref",
+   "fieldtype": "Data",
+   "label": "Reference",
+   "description": "Bank a/c number \u00b7 QBO account id."
+  },
+  {
+   "fieldname": "position_group",
+   "fieldtype": "Select",
+   "label": "Group",
+   "options": "bank\ncash\nloan",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_amounts",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "bank_balance",
+   "fieldtype": "Currency",
+   "label": "Bank Statement",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "bank_present",
+   "fieldtype": "Check",
+   "label": "Bank Sourced",
+   "default": "0",
+   "description": "0 = there is no current statement for this account. A zero balance and no source are different facts and must not both read as 0."
+  },
+  {
+   "fieldname": "bank_available",
+   "fieldtype": "Currency",
+   "label": "Bank Available",
+   "options": "currency",
+   "description": "What may be drawn today: the ledger balance net of uncleared items and, on Baroda, the OD arrangement. Differs from bank_balance by 1.85M across the KES accounts on 2026-07-25."
+  },
+  {
+   "fieldname": "bank_available_present",
+   "fieldtype": "Check",
+   "label": "Bank Available Present",
+   "description": "Currency columns cannot be NULL, so a missing figure reads as 0.00. Baroda USD carries no Available in the tracker \u2014 this flag keeps that a blank rather than a confident zero."
+  },
+  {
+   "fieldname": "bank_source",
+   "fieldtype": "Data",
+   "label": "Bank Source",
+   "description": "Which source won for this row: bank_tracker | statement | erpnext_ledger. Shown so a figure can always be traced without opening the job."
+  },
+  {
+   "fieldname": "bank_as_at",
+   "fieldtype": "Data",
+   "label": "Bank As At",
+   "description": "Per-row stamp. The tracker carries Finance's control date while M-PESA is live, so one date on the document would overstate freshness."
+  },
+  {
+   "fieldname": "qbo_balance",
+   "fieldtype": "Currency",
+   "label": "QuickBooks",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "qbo_present",
+   "fieldtype": "Check",
+   "label": "QBO Sourced",
+   "default": "0"
+  },
+  {
+   "fieldname": "erp_balance",
+   "fieldtype": "Currency",
+   "label": "ERPNext"
+  },
+  {
+   "fieldname": "erp_present",
+   "fieldtype": "Check",
+   "label": "ERP Sourced",
+   "default": "0"
+  },
+  {
+   "fieldname": "column_break_status",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "open\nties\nno_statement\nstale\nnot_in_erp\nbooks_differ\nunallocated",
+   "reqd": 1
+  },
+  {
+   "fieldname": "line_note",
+   "fieldtype": "Data",
+   "label": "Note"
+  }
  ],
  "istable": 1,
  "links": [],

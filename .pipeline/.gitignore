@@ -1,0 +1,9 @@
+# Per-feature handoff files are ephemeral — regenerated every /ship run.
+request.md
+spec.md
+changes.md
+test-results.md
+review.md
+
+# project-context.md IS committed (shared, reused across features) — not ignored.
+# README.md is committed.

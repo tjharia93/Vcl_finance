@@ -26,24 +26,116 @@
   "source_payload"
  ],
  "fields": [
-  {"fieldname": "position_date", "fieldtype": "Date", "label": "Position Date", "reqd": 1, "unique": 1, "in_list_view": 1, "description": "One row per day. A re-run for the same date updates it in place rather than stacking duplicates."},
-  {"fieldname": "as_at", "fieldtype": "Data", "label": "As At", "description": "Human-readable run timestamp, e.g. '25 Jul 2026 06:15 EAT'."},
-  {"fieldname": "bank_range", "fieldtype": "Data", "label": "Statement Range", "description": "Span of the statement files this position was built from."},
-  {"fieldname": "currency", "fieldtype": "Data", "label": "Currency", "default": "KES"},
-  {"fieldname": "column_break_totals", "fieldtype": "Column Break"},
-  {"fieldname": "covered_accounts", "fieldtype": "Int", "label": "Accounts Covered", "description": "Accounts holding BOTH a current statement and a QBO balance — the only ones that can be reconciled."},
-  {"fieldname": "covered_bank", "fieldtype": "Currency", "label": "Net Bank (covered)", "in_list_view": 1},
-  {"fieldname": "covered_qbo", "fieldtype": "Currency", "label": "Same Accounts per QBO"},
-  {"fieldname": "covered_erp", "fieldtype": "Currency", "label": "Same Accounts per ERP"},
-  {"fieldname": "covered_variance", "fieldtype": "Currency", "label": "Bank → QBO Variance", "in_list_view": 1},
-  {"fieldname": "column_break_debt", "fieldtype": "Column Break"},
-  {"fieldname": "debt_qbo", "fieldtype": "Currency", "label": "Debt per QBO"},
-  {"fieldname": "debt_erp", "fieldtype": "Currency", "label": "Debt per ERP"},
-  {"fieldname": "section_lines", "fieldtype": "Section Break", "label": "Accounts"},
-  {"fieldname": "lines", "fieldtype": "Table", "label": "Lines", "options": "Daily Cash Position Line"},
-  {"fieldname": "section_note", "fieldtype": "Section Break", "label": "Caveats"},
-  {"fieldname": "note", "fieldtype": "Small Text", "label": "Note", "description": "Why ERPNext is not a tie-out basis for this run."},
-  {"fieldname": "source_payload", "fieldtype": "Code", "label": "Source Payload", "options": "JSON", "hidden": 1, "description": "Raw job output, kept so a position can be re-read without re-running the recon."}
+  {
+   "fieldname": "position_date",
+   "fieldtype": "Date",
+   "label": "Position Date",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "description": "One row per day. A re-run for the same date updates it in place rather than stacking duplicates."
+  },
+  {
+   "fieldname": "as_at",
+   "fieldtype": "Data",
+   "label": "As At",
+   "description": "Human-readable run timestamp, e.g. '25 Jul 2026 06:15 EAT'."
+  },
+  {
+   "fieldname": "bank_range",
+   "fieldtype": "Data",
+   "label": "Statement Range",
+   "description": "Span of the statement files this position was built from."
+  },
+  {
+   "fieldname": "currency",
+   "fieldtype": "Data",
+   "label": "Currency",
+   "default": "KES"
+  },
+  {
+   "fieldname": "column_break_totals",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "covered_accounts",
+   "fieldtype": "Int",
+   "label": "Accounts Covered",
+   "description": "Accounts holding BOTH a current statement and a QBO balance \u2014 the only ones that can be reconciled."
+  },
+  {
+   "fieldname": "covered_bank",
+   "fieldtype": "Currency",
+   "label": "Net Bank (covered)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "covered_bank_available",
+   "fieldtype": "Currency",
+   "label": "Covered Bank Available",
+   "options": "currency",
+   "description": "Drawable total across covered accounts. KES only \u2014 the workbook excludes the USD account from its own Total row and so do we; summing currencies produced a number that is not any real quantity."
+  },
+  {
+   "fieldname": "covered_qbo",
+   "fieldtype": "Currency",
+   "label": "Same Accounts per QBO"
+  },
+  {
+   "fieldname": "covered_erp",
+   "fieldtype": "Currency",
+   "label": "Same Accounts per ERP"
+  },
+  {
+   "fieldname": "covered_variance",
+   "fieldtype": "Currency",
+   "label": "Bank \u2192 QBO Variance",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "column_break_debt",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "debt_qbo",
+   "fieldtype": "Currency",
+   "label": "Debt per QBO"
+  },
+  {
+   "fieldname": "debt_erp",
+   "fieldtype": "Currency",
+   "label": "Debt per ERP"
+  },
+  {
+   "fieldname": "section_lines",
+   "fieldtype": "Section Break",
+   "label": "Accounts"
+  },
+  {
+   "fieldname": "lines",
+   "fieldtype": "Table",
+   "label": "Lines",
+   "options": "Daily Cash Position Line"
+  },
+  {
+   "fieldname": "section_note",
+   "fieldtype": "Section Break",
+   "label": "Caveats"
+  },
+  {
+   "fieldname": "note",
+   "fieldtype": "Small Text",
+   "label": "Note",
+   "description": "Why ERPNext is not a tie-out basis for this run."
+  },
+  {
+   "fieldname": "source_payload",
+   "fieldtype": "Code",
+   "label": "Source Payload",
+   "options": "JSON",
+   "hidden": 1,
+   "description": "Raw job output, kept so a position can be re-read without re-running the recon."
+  }
  ],
  "links": [],
  "modified": "2026-07-25 00:00:00",
@@ -52,7 +144,15 @@
  "name": "Daily Cash Position",
  "owner": "Administrator",
  "permissions": [
-  {"role": "System Manager", "read": 1, "write": 1, "create": 1, "delete": 1, "report": 1, "export": 1}
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1
+  }
  ],
  "sort_field": "position_date",
  "sort_order": "DESC",

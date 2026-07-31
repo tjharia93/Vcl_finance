@@ -1,0 +1,173 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "autoname": "",
+ "creation": "2026-07-31 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "company",
+  "source_type",
+  "source_key",
+  "column_break_key",
+  "is_default",
+  "approved",
+  "section_break_erp",
+  "erp_account",
+  "column_break_erp",
+  "erp_party_type",
+  "section_break_qbo",
+  "qbo_account",
+  "column_break_qbo",
+  "qbo_tax_code",
+  "section_break_notes",
+  "notes"
+ ],
+ "fields": [
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "label": "Company",
+   "options": "Company",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Defaults are per company. A map row never applies to another company."
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "options": "Voucher Category\nWages Entry\nParking\nBike Fuel\nForklift\nLoan\nFloat\nReplenishment",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Which family of petty cash row this default applies to."
+  },
+  {
+   "fieldname": "source_key",
+   "fieldtype": "Data",
+   "label": "Source Key",
+   "length": 40,
+   "reqd": 1,
+   "in_list_view": 1,
+   "description": "The specific value within that family — e.g. TG / TE / SE / OA / FD / GP / OT for a Voucher Category, or Wage / Overtime / Piecework / Commission for a Wages Entry. For families with only one variant (Parking, Bike Fuel, Forklift, Loan) repeat the Source Type here."
+  },
+  {
+   "fieldname": "column_break_key",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "is_default",
+   "fieldtype": "Check",
+   "label": "Use as Default",
+   "default": "1",
+   "in_list_view": 1,
+   "description": "Ticked, the posting run pre-fills this account automatically. Unticked, the row is remembered but never applied on its own — the account must be chosen each time."
+  },
+  {
+   "fieldname": "approved",
+   "fieldtype": "Check",
+   "label": "Approved",
+   "default": "0",
+   "in_list_view": 1,
+   "description": "Nothing posts through an unapproved map row. Approving is the deliberate act that lets money reach a ledger."
+  },
+  {
+   "fieldname": "section_break_erp",
+   "fieldtype": "Section Break",
+   "label": "ERPNext"
+  },
+  {
+   "fieldname": "erp_account",
+   "fieldtype": "Link",
+   "label": "ERP Account",
+   "options": "Account",
+   "description": "The account debited (or credited, for a float) in the ERPNext Journal Entry."
+  },
+  {
+   "fieldname": "column_break_erp",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "erp_party_type",
+   "fieldtype": "Select",
+   "label": "Party Type",
+   "options": "\nEmployee\nSupplier\nCustomer",
+   "description": "Required when the ERP account is Receivable or Payable — e.g. Employee Advances. The party itself comes from the petty cash row."
+  },
+  {
+   "fieldname": "section_break_qbo",
+   "fieldtype": "Section Break",
+   "label": "QuickBooks"
+  },
+  {
+   "fieldname": "qbo_account",
+   "fieldtype": "Link",
+   "label": "QBO Account",
+   "options": "QBO Account",
+   "description": "Leave blank if this source should never reach QuickBooks."
+  },
+  {
+   "fieldname": "column_break_qbo",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "qbo_tax_code",
+   "fieldtype": "Link",
+   "label": "QBO Tax Code",
+   "options": "QBO Tax Code",
+   "description": "Set for VAT-claimable spend (SP-16). Only ever applied to rows that actually carry an ETR receipt."
+  },
+  {
+   "fieldname": "section_break_notes",
+   "fieldtype": "Section Break"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes",
+   "description": "Why this account was chosen. Worth a line — the next person to look will not remember."
+  }
+ ],
+ "links": [],
+ "modified": "2026-07-31 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Petty Cash",
+ "name": "Posting Map",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  },
+  {
+   "create": 1,
+   "delete": 0,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "Accounts Manager",
+   "write": 1
+  },
+  {
+   "read": 1,
+   "report": 1,
+   "role": "Accounts User"
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

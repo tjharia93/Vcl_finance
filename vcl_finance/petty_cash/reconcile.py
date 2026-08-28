@@ -111,14 +111,21 @@ def reconcile_all(float_name=None):
 
 
 @frappe.whitelist()
-def opening_chain(float_name="Cash"):
+def opening_chain(float_name=None, **kwargs):
     """Walk the carry-forward chain for one float, computing closes FROM ENTRIES.
+
+    Accepts ``float`` as an alias for ``float_name``. The DocType field is literally
+    called ``float``, so every caller reaches for that first and Frappe silently drops
+    the unmatched kwarg — you get the Cash chain back and no error to tell you why.
+    ``float`` cannot be the parameter name itself without shadowing the builtin, so
+    the alias is taken from kwargs instead.
 
     Reports only. Every break it finds is a real, already-diagnosed defect:
     ``opening_balance`` is a creation-time snapshot that is never recomputed, so
     editing a week after the next sheet exists silently breaks the link and nothing
     warns. Repairing that is phase 4.
     """
+    float_name = float_name or kwargs.get("float") or "Cash"
     sheets = frappe.get_all(
         "Petty Cash Sheet",
         filters={"docstatus": ("<", 2), "float": float_name},

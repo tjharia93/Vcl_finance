@@ -21,7 +21,7 @@ import json
 
 import frappe
 from frappe import _
-from frappe.utils import cint, flt, getdate, add_days
+from frappe.utils import cint, flt, getdate, add_days, get_url
 
 from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import (
     VEHICLES, DAY_NAMES, CATEGORY_CODES, week_saturday, create_for_week,
@@ -927,3 +927,98 @@ def petty_cash_analytics(period="8"):
         "top_recipients": top_recipients,
         "voided_log": voided_log[:50],
     }
+
+
+@frappe.whitelist()
+def range_report_xlsx(from_date, to_date, float=None):
+    """Download the date-range report as an Excel workbook.
+
+    Same numbers as ``range_report``, laid out the way Finance reads a week:
+    categories across the top, days down the rows. One week gives Summary /
+    Vouchers / Registers; several give a Range summary tab first.
+
+    The workbook itself is built by ``report_xlsx``, which has no frappe import
+    so the local ``pcreport`` CLI produces a byte-identical file.
+    """
+    if not _is_accounts_manager():
+        frappe.throw(_("Accounts Manager only."), frappe.PermissionError)
+
+    from vcl_finance.petty_cash import report_xlsx
+
+    filters = {"week_ending": ["between", [from_date, to_date]]}
+    if float:
+        filters["float"] = float
+    names = frappe.get_all("Petty Cash Sheet", filters=filters,
+                           order_by="week_ending asc", pluck="name")
+    if not names:
+        frappe.throw(_("No petty cash sheet falls in {0} → {1}.").format(from_date, to_date))
+
+    sheets = [frappe.get_doc("Petty Cash Sheet", nm).as_dict() for nm in names]
+    checks = _report_checks(sheets)
+    content = report_xlsx.build_workbook(
+        sheets, from_date=from_date, to_date=to_date,
+        source=get_url(), checks=checks)
+
+    frappe.local.response.filename = report_xlsx.filename(sheets, from_date, to_date)
+    frappe.local.response.filecontent = content
+    frappe.local.response.type = "binary"
+
+
+def _report_checks(sheets):
+    """Data-quality lines for the workbook's Notes tab.
+
+    The carry-forward chain is diffed BOTH ways: opening_balance is a
+    creation-time snapshot that is never recomputed, so a week can tie to the
+    one before it and still fail to carry into the one after.
+    """
+    from vcl_finance.petty_cash import report_xlsx
+
+    checks = []
+    for d in sheets:
+        nm, we, fl = d.get("name"), d.get("week_ending"), d.get("float")
+        days = set(report_xlsx.week_days(we))
+
+        stray = [v.get("recipient") or v.get("row_idx") for v in (d.get("vouchers") or [])
+                 if v.get("txn_date") and not v.get("cancelled")
+                 and report_xlsx.as_date(v.get("txn_date")) not in days]
+        checks.append((not stray,
+                       f"{nm}: all dated rows fall inside the Sun–Sat span." if not stray else
+                       f"{nm}: {len(stray)} row(s) dated outside the week span — "
+                       + ", ".join(str(s) for s in stray[:5]) + "."))
+
+        approved = d.get("status") == "Approved"
+        checks.append((approved, f"{nm}: status is {d.get('status')}."
+                       + ("" if approved else " Figures can still change until it is approved.")))
+
+        counted = d.get("cash_count_end") or 0
+        checks.append((bool(counted),
+                       f"{nm}: physical cash count recorded." if counted else
+                       f"{nm}: no physical cash count entered, so the variance figure is not meaningful."))
+
+        close = counted or flt(d.get("expected_close"))
+        prior = frappe.get_all("Petty Cash Sheet",
+                               filters={"float": fl, "week_ending": ["<", we]},
+                               fields=["name", "week_ending", "expected_close", "cash_count_end"],
+                               order_by="week_ending desc", limit=1)
+        if prior:
+            p = prior[0]
+            pc = flt(p.cash_count_end) or flt(p.expected_close)
+            gap = flt(d.get("opening_balance")) - pc
+            checks.append((abs(gap) < 1,
+                           f"{nm}: opening ties to {p.name} (w/e {p.week_ending}) close of {pc:,.0f}."
+                           if abs(gap) < 1 else
+                           f"{nm}: opening {flt(d.get('opening_balance')):,.0f} does NOT tie to {p.name} "
+                           f"close {pc:,.0f} — gap {gap:,.0f}. opening_balance is a creation-time "
+                           "snapshot and is never recomputed."))
+        nxt = frappe.get_all("Petty Cash Sheet",
+                             filters={"float": fl, "week_ending": [">", we]},
+                             fields=["name", "week_ending", "opening_balance"],
+                             order_by="week_ending asc", limit=1)
+        if nxt:
+            n = nxt[0]
+            gap = flt(n.opening_balance) - close
+            if abs(gap) >= 1:
+                checks.append((False,
+                               f"{nm}: this week's close {close:,.0f} does NOT carry into {n.name} "
+                               f"(w/e {n.week_ending}) opening {flt(n.opening_balance):,.0f} — gap {gap:,.0f}."))
+    return checks

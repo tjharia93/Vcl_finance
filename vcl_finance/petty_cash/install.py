@@ -24,6 +24,23 @@ def after_install():
     seed_categories()
     ensure_petty_cash_role()
     frappe.db.commit()
+    backfill_entries()
+
+
+def backfill_entries():
+    """Mirror existing sheets into Petty Cash Entry on a FRESH install.
+
+    ``install_app()`` ends with ``set_all_patches_as_completed()``, so every line of
+    patches.txt is written to the Patch Log unexecuted and migrate never retries it.
+    A fresh site would therefore be marked as backfilled having never backfilled.
+    Both routes are idempotent, so running twice is harmless.
+    """
+    try:
+        from vcl_finance.petty_cash.patches.backfill_petty_cash_entries import backfill
+        backfill()
+    except Exception:
+        frappe.log_error(title="Petty Cash backfill (after_install)",
+                         message=frappe.get_traceback())
 
 
 def ensure_petty_cash_role():

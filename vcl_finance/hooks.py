@@ -20,6 +20,19 @@ web_include_js = "/assets/vcl_finance/js/petty_cash.js"
 # Run after install: seed Petty Cash Category and the 5 vehicle plates.
 after_install = "vcl_finance.petty_cash.install.after_install"
 
+# Document events
+# ---------------
+# The one-way mirror: every Petty Cash Sheet save reconciles its child rows into
+# Petty Cash Entry. Wired here rather than in the sheet controller so the shadow
+# model stays removable without touching the capture path. Synchronous on purpose —
+# no enqueue, no scheduler (Frappe Cloud pauses the scheduler on every deploy) — and
+# the mirror swallows its own exceptions so it can never block a custodian's save.
+doc_events = {
+    "Petty Cash Sheet": {
+        "on_update": "vcl_finance.petty_cash.mirror.on_sheet_update",
+    },
+}
+
 # Fixtures
 # --------
 # Ship the restricted "Petty Cash User" role (Phase 5 login). Filtered so we

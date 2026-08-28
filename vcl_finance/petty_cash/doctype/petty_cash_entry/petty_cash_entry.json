@@ -1,0 +1,459 @@
+{
+ "actions": [],
+ "allow_import": 1,
+ "allow_rename": 0,
+ "autoname": "PCE-.YYYY.-.#####",
+ "creation": "2026-08-28 00:00:00",
+ "doctype": "DocType",
+ "editable_grid": 1,
+ "engine": "InnoDB",
+ "field_order": [
+  "section_entry",
+  "txn_date",
+  "week_ending",
+  "float",
+  "col_entry_a",
+  "source_type",
+  "source_key",
+  "category",
+  "col_entry_b",
+  "recipient",
+  "amount",
+  "cash_in",
+  "section_evidence",
+  "receipt",
+  "receipt_etr",
+  "col_evidence",
+  "pc_received",
+  "etr_received",
+  "section_approval",
+  "status",
+  "approved_by",
+  "approved_on",
+  "changed_after_approval",
+  "col_approval",
+  "withdrawn_by",
+  "withdrawn_on",
+  "withdrawal_reason",
+  "section_ask",
+  "receipt_asked_from",
+  "receipt_asked_on",
+  "col_ask",
+  "receipt_ask_reason",
+  "receipt_answered_on",
+  "section_origin",
+  "origin_doctype",
+  "origin_row",
+  "origin_sheet",
+  "col_origin",
+  "origin_week_ending",
+  "origin_hash",
+  "sync_state",
+  "payload",
+  "section_detail",
+  "notes",
+  "col_detail",
+  "cancelled",
+  "cancelled_on",
+  "cancelled_by",
+  "cancel_remark"
+ ],
+ "fields": [
+  {
+   "fieldname": "section_entry",
+   "fieldtype": "Section Break",
+   "label": "Entry"
+  },
+  {
+   "fieldname": "txn_date",
+   "fieldtype": "Date",
+   "label": "Transaction Date",
+   "reqd": 1,
+   "default": "Today",
+   "in_list_view": 1,
+   "search_index": 1,
+   "description": "The date the cash actually moved. This is what files the entry into a week."
+  },
+  {
+   "fieldname": "week_ending",
+   "fieldtype": "Date",
+   "label": "Week Ending (Saturday)",
+   "read_only": 1,
+   "search_index": 1,
+   "description": "Derived from txn_date (Sun-Sat, so the following Saturday). Never typed. Falls back to the source sheet's week when the row carries no date \u2014 151 legacy rows do."
+  },
+  {
+   "fieldname": "float",
+   "fieldtype": "Select",
+   "label": "Float",
+   "options": "Cash\nHauz-Pay",
+   "reqd": 1,
+   "default": "Cash",
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "col_entry_a",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "source_type",
+   "fieldtype": "Select",
+   "label": "Source Type",
+   "reqd": 1,
+   "in_list_view": 1,
+   "options": "Voucher Category\nWages Entry\nParking\nBike Fuel\nForklift\nLoan\nFloat\nReplenishment",
+   "description": "Which family of petty cash row this is. Matches Posting Map.source_type verbatim so phase 5 posting is a direct lookup."
+  },
+  {
+   "fieldname": "source_key",
+   "fieldtype": "Data",
+   "label": "Source Key",
+   "description": "The specific value within that family - voucher category code, wages entry_type, or vehicle plate. Pairs with source_type for the Posting Map lookup."
+  },
+  {
+   "fieldname": "category",
+   "fieldtype": "Link",
+   "label": "Category",
+   "options": "Petty Cash Category"
+  },
+  {
+   "fieldname": "col_entry_b",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "recipient",
+   "fieldtype": "Data",
+   "label": "Recipient"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount",
+   "reqd": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cash_in",
+   "fieldtype": "Check",
+   "label": "Cash IN",
+   "default": "0",
+   "description": "Tick for a refund / float top-up - adds to the running balance instead of subtracting."
+  },
+  {
+   "fieldname": "section_evidence",
+   "fieldtype": "Section Break",
+   "label": "Evidence"
+  },
+  {
+   "fieldname": "receipt",
+   "fieldtype": "Attach Image",
+   "label": "Receipt"
+  },
+  {
+   "fieldname": "receipt_etr",
+   "fieldtype": "Attach Image",
+   "label": "ETR Receipt"
+  },
+  {
+   "fieldname": "col_evidence",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "pc_received",
+   "fieldtype": "Check",
+   "label": "PC Slip Received",
+   "default": "0"
+  },
+  {
+   "fieldname": "etr_received",
+   "fieldtype": "Check",
+   "label": "ETR Received",
+   "default": "0"
+  },
+  {
+   "fieldname": "section_approval",
+   "fieldtype": "Section Break",
+   "label": "Approval"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Unapproved\nApproved\nWithdrawn\nVoid",
+   "default": "Unapproved",
+   "permlevel": 1,
+   "search_index": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "approved_by",
+   "fieldtype": "Link",
+   "label": "Approved By",
+   "options": "User",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "approved_on",
+   "fieldtype": "Datetime",
+   "label": "Approved On",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "changed_after_approval",
+   "fieldtype": "Check",
+   "label": "Changed After Approval",
+   "default": "0",
+   "read_only": 1,
+   "permlevel": 1,
+   "description": "Set by the mirror when the source row was edited after approval. Never clears the approval by itself - a human decides."
+  },
+  {
+   "fieldname": "col_approval",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "withdrawn_by",
+   "fieldtype": "Link",
+   "label": "Withdrawn By",
+   "options": "User",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "withdrawn_on",
+   "fieldtype": "Datetime",
+   "label": "Withdrawn On",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "withdrawal_reason",
+   "fieldtype": "Small Text",
+   "label": "Withdrawal Reason",
+   "permlevel": 1,
+   "description": "Required when status moves to Withdrawn."
+  },
+  {
+   "fieldname": "section_ask",
+   "fieldtype": "Section Break",
+   "label": "Receipt Request"
+  },
+  {
+   "fieldname": "receipt_asked_from",
+   "fieldtype": "Link",
+   "label": "Receipt Asked From",
+   "options": "User",
+   "description": "The custodian who entered the row - not the payee."
+  },
+  {
+   "fieldname": "receipt_asked_on",
+   "fieldtype": "Datetime",
+   "label": "Receipt Asked On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "col_ask",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "receipt_ask_reason",
+   "fieldtype": "Select",
+   "label": "Reason Asked",
+   "options": "\nNo slip attached\nNeed the ETR\nPhoto unreadable"
+  },
+  {
+   "fieldname": "receipt_answered_on",
+   "fieldtype": "Datetime",
+   "label": "Receipt Answered On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "section_origin",
+   "fieldtype": "Section Break",
+   "label": "Origin"
+  },
+  {
+   "fieldname": "origin_doctype",
+   "fieldtype": "Data",
+   "label": "Origin DocType",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "origin_row",
+   "fieldtype": "Data",
+   "label": "Origin Row",
+   "read_only": 1,
+   "permlevel": 1,
+   "unique": 1,
+   "description": "Docname of the child row this mirrors. A native entry stores its OWN docname here - never blank, so the unique index cannot collide on empty strings."
+  },
+  {
+   "fieldname": "origin_sheet",
+   "fieldtype": "Link",
+   "label": "Origin Sheet",
+   "options": "Petty Cash Sheet",
+   "read_only": 1,
+   "permlevel": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "col_origin",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "origin_week_ending",
+   "fieldtype": "Date",
+   "label": "Origin Week Ending",
+   "read_only": 1,
+   "permlevel": 1,
+   "description": "What the SHEET says. Kept so reconciliation can REPORT the difference from the derived week_ending rather than hide it."
+  },
+  {
+   "fieldname": "origin_hash",
+   "fieldtype": "Data",
+   "label": "Origin Hash",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "sync_state",
+   "fieldtype": "Select",
+   "label": "Sync State",
+   "options": "Mirrored\nOrphaned\nNative",
+   "default": "Mirrored",
+   "read_only": 1,
+   "permlevel": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "payload",
+   "fieldtype": "Long Text",
+   "label": "Payload (JSON)",
+   "read_only": 1,
+   "permlevel": 1,
+   "description": "Every source field the typed columns do not cover: vehicle, paye, staff_id, amount_signed, recipient_signed, authorised_signed, day_idx, slot, voucher_no."
+  },
+  {
+   "fieldname": "section_detail",
+   "fieldtype": "Section Break",
+   "label": "Detail"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "col_detail",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "cancelled",
+   "fieldtype": "Check",
+   "label": "Cancelled (void)",
+   "default": "0"
+  },
+  {
+   "fieldname": "cancelled_on",
+   "fieldtype": "Datetime",
+   "label": "Cancelled On",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancelled_by",
+   "fieldtype": "Link",
+   "label": "Cancelled By",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cancel_remark",
+   "fieldtype": "Small Text",
+   "label": "Cancel Remark"
+  }
+ ],
+ "index_web_pages_for_search": 0,
+ "is_submittable": 0,
+ "links": [],
+ "modified": "2026-08-28 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Petty Cash",
+ "name": "Petty Cash Entry",
+ "naming_rule": "Expression (old style)",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "permlevel": 0,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "email": 1,
+   "print": 1,
+   "share": 1
+  },
+  {
+   "role": "System Manager",
+   "read": 1,
+   "permlevel": 1,
+   "write": 1
+  },
+  {
+   "role": "Accounts Manager",
+   "read": 1,
+   "permlevel": 0,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1,
+   "email": 1,
+   "print": 1,
+   "share": 1
+  },
+  {
+   "role": "Accounts Manager",
+   "read": 1,
+   "permlevel": 1,
+   "write": 1
+  },
+  {
+   "role": "Accounts User",
+   "read": 1,
+   "permlevel": 0,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Accounts User",
+   "read": 1,
+   "permlevel": 1
+  },
+  {
+   "role": "Petty Cash User",
+   "read": 1,
+   "permlevel": 0,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Petty Cash User",
+   "read": 1,
+   "permlevel": 1
+  }
+ ],
+ "sort_field": "txn_date",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1
+}

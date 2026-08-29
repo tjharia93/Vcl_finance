@@ -202,34 +202,76 @@ def _entry_values(sheet, table, row):
     }
 
 
-def _seed_approval(values):
-    """Carry the sheet's per-row sign-off into the entry's approval fields.
+def _signature_agrees(values, status):
+    """Does the entry's status already say what the source row says?
 
-    Two states arrive from the sheet and both were being dropped:
+    An unlocked row has no opinion between ``Unapproved`` and ``Withdrawn`` — both
+    mean unsigned, and withdrawal carries a reason worth keeping — so either counts
+    as agreement.
+    """
+    if values.get("cancelled"):
+        return status == "Void"
+    if values.get("locked"):
+        return status == "Approved"
+    return status in ("Unapproved", "Withdrawn")
 
-    - ``locked`` is the tick Finance puts against a line once they have checked
-      it. It is the per-line approval that already exists, so an entry mirrored
-      from a locked row starts Approved, stamped with whoever ticked it and when.
-      Rows locked before ``locked_by`` was recorded carry no approver — better a
-      blank name than a wrong one.
-    - ``cancelled`` is a void. Status rides ALONGSIDE the flag rather than
-      replacing it, because every total filters on ``cancelled``; a voided row
-      that read Unapproved sat in the queue's own reports as though it were
-      waiting for someone.
 
-    Only ever called while the entry is still Unapproved, so it seeds and never
-    overrides a decision a human made on the approvals screen.
+def _reconcile_approval(values, current_status=None):
+    """Hold the invariant: **locked means approved, and approved means locked.**
+
+    The tick on the sheet row and the approval on the entry are one signature seen
+    from two sides, so this reconciles the entry's side to whatever the row now says
+    rather than only seeding it once:
+
+    - cancelled            -> Void. Status rides ALONGSIDE the flag, never instead
+                              of it; every total filters on ``cancelled``, and a
+                              voided row reading Unapproved sat in the queue's counts
+                              as though someone still owed it a decision.
+    - locked               -> Approved, stamped from ``locked_by`` / ``locked_on``.
+                              Rows locked before ``locked_by`` was recorded carry no
+                              approver: a blank is honest, a guess is not.
+    - unlocked + Approved  -> back to Unapproved, stamps cleared. Removing the tick
+                              removes the signature, and the line returns to the
+                              queue.
+    - unlocked + Withdrawn -> left alone. Withdrawal is an explicit act with a stated
+                              reason, not the absence of a tick, and re-opening it
+                              here would throw that reason away.
+    - Void but not cancelled -> back to Unapproved: the row was reinstated.
+
+    Un-approving on an untick is only safe because ticking and unticking are both
+    Accounts-Manager-only now. While the custodian could tick, honouring the box
+    would have let the person who entered a payment revoke Finance's signature; with
+    the guard in place an untick IS a Finance decision, just taken on the other
+    surface.
     """
     locked = values.pop("locked", 0)
     locked_by = values.pop("locked_by", None)
     locked_on = values.pop("locked_on", None)
+
     if values.get("cancelled"):
         values["status"] = "Void"
         return
+    if current_status == "Void":
+        # cancelled is false but the entry still says Void — the row came back.
+        values["status"] = "Approved" if locked else "Unapproved"
+        if not locked:
+            values["approved_by"] = None
+            values["approved_on"] = None
+        return
+
     if locked:
-        values["status"] = "Approved"
-        values["approved_by"] = locked_by or None
-        values["approved_on"] = locked_on or None
+        if current_status != "Approved":
+            values["status"] = "Approved"
+            values["approved_by"] = locked_by or None
+            values["approved_on"] = locked_on or None
+        return
+
+    if current_status == "Approved":
+        values["status"] = "Unapproved"
+        values["approved_by"] = None
+        values["approved_on"] = None
+    elif current_status is None:
+        values["status"] = "Unapproved"
 
 
 def mirror_sheet(sheet, raise_on_error=False):
@@ -260,14 +302,21 @@ def mirror_sheet(sheet, raise_on_error=False):
                 prior = existing.get(row.get("name"))
 
                 if prior is None:
-                    _seed_approval(values)
+                    _reconcile_approval(values)
                     doc = frappe.get_doc(values)
                     doc.flags.ignore_permissions = True   # permlevel-1 origin_* fields
                     doc.insert(ignore_permissions=True)
                     stats["created"] += 1
                     continue
 
-                if prior["origin_hash"] == values["origin_hash"] and prior["sync_state"] == "Mirrored":
+                # Skip only when the money AND the signature already agree. The
+                # hash deliberately excludes `locked`, so a bare tick or untick does
+                # not move it — without the second test an untick would be skipped
+                # here and never honoured, which is the exact opposite of the
+                # invariant this file is supposed to hold.
+                if (prior["origin_hash"] == values["origin_hash"]
+                        and prior["sync_state"] == "Mirrored"
+                        and _signature_agrees(values, prior["status"])):
                     stats["unchanged"] += 1
                     continue
 
@@ -276,13 +325,8 @@ def mirror_sheet(sheet, raise_on_error=False):
                 # more. Clearing the approval is a human decision, not a sweep's.
                 if doc.status == "Approved" and prior["origin_hash"] != values["origin_hash"]:
                     values["changed_after_approval"] = 1
-                # Seed from the lock only while nothing has decided yet. An entry
-                # approved on the approvals screen keeps its own approver.
-                if doc.status == "Unapproved":
-                    _seed_approval(values)
-                else:
-                    for k in ("locked", "locked_by", "locked_on"):
-                        values.pop(k, None)
+                # Reconcile the signature both ways — see _reconcile_approval.
+                _reconcile_approval(values, doc.status)
                 for field, value in values.items():
                     if field != "doctype":
                         doc.set(field, value)

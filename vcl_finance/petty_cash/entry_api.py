@@ -11,9 +11,15 @@ definition of "who may approve", or the two drift and the weaker one wins.
 
 WHAT THESE MAY AND MAY NOT TOUCH
 --------------------------------
-Approval is safe to write on the entry because the mirror never writes those fields —
-``status``, ``approved_*``, ``withdrawn_*``, ``receipt_asked_*`` exist only on this
-side and no source row has an opinion about them.
+``approved_*``, ``withdrawn_*`` and ``receipt_asked_*`` exist only on this side, so
+they are safe to write here.
+
+``status`` is shared. The sheet's per-row lock IS the per-line approval, so the
+mirror seeds status from it and approving here writes the lock BACK — a single
+narrow exception to the one-way rule, and a deliberate one: two records of the same
+signature that cannot disagree are worth more than a purity we were only keeping
+for its own sake. The exception is exactly one boolean and its stamps; nothing else
+ever travels from entry to sheet.
 
 ``txn_date`` and ``cancelled`` are different: the mirror OWNS them. It copies both
 from the child row on every sheet save, so setting them here survives exactly until
@@ -60,6 +66,41 @@ def _refuse_if_mirrored(doc, what, where):
         )
 
 
+def _write_lock_back(doc, locked):
+    """Tick (or untick) the sheet row this entry mirrors, so both views agree.
+
+    The row lock IS the per-line approval — the mirror reads it and stamps the
+    entry Approved. Approving here without setting it would leave two records of
+    the same fact free to disagree: the sheet showing a line unsigned that Finance
+    has signed, and a re-mirror later reading the sheet's silence as the truth.
+
+    Written with ``db.set_value`` on the child row rather than by saving the sheet.
+    Saving would re-run every sheet validation and fire ``on_update``, which runs
+    the mirror again mid-approval; and a sheet that fails an unrelated validation
+    would then block an approval that has nothing to do with it. The permission
+    question was already answered by ``_assert_finance()`` above — this is the same
+    person the sheet's own guard would have allowed to tick the box by hand.
+
+    Native entries have no row to write to and are skipped.
+    """
+    if doc.sync_state != "Mirrored" or not doc.origin_doctype or not doc.origin_row:
+        return
+    try:
+        frappe.db.set_value(doc.origin_doctype, doc.origin_row, {
+            "locked": 1 if locked else 0,
+            "locked_by": frappe.session.user if locked else None,
+            "locked_on": now_datetime() if locked else None,
+        }, update_modified=False)
+    except Exception:
+        # The approval itself stands. Say so loudly rather than failing the action:
+        # the sweep will show the two out of step, which is a smaller problem than
+        # refusing to record a decision Finance has made.
+        frappe.log_error(
+            title="Petty cash: could not write approval back to the sheet row",
+            message=f"entry={doc.name} row={doc.origin_doctype}/{doc.origin_row}\n\n{frappe.get_traceback()}",
+        )
+
+
 @frappe.whitelist(methods=["POST"])
 def approve_entry(entry):
     """Finance approves one entry. Per entry, never per week (PC-002)."""
@@ -78,6 +119,7 @@ def approve_entry(entry):
     # "changed since approval" flag starts clean again.
     doc.changed_after_approval = 0
     doc.save()
+    _write_lock_back(doc, True)
     return {"entry": doc.name, "status": doc.status,
             "approved_by": doc.approved_by, "approved_on": str(doc.approved_on)}
 
@@ -100,6 +142,9 @@ def withdraw_entry(entry, reason=None):
     doc.withdrawn_by = frappe.session.user
     doc.withdrawn_on = now_datetime()
     doc.save()
+    # Withdrawing has to untick too, or the sheet keeps asserting a signature that
+    # has been taken back — and the next mirror run would read it and re-approve.
+    _write_lock_back(doc, False)
     return {"entry": doc.name, "status": doc.status,
             "withdrawn_by": doc.withdrawn_by, "reason": doc.withdrawal_reason}
 

@@ -21,10 +21,13 @@ Four properties this file exists to guarantee:
    lets the next run skip what already matches, so a half-finished run leaves consistent
    partial state and the next one completes it.
 
-4. **It never approves anything.** The mirror writes source facts. When a row changes
-   underneath an approval it raises ``changed_after_approval`` and stops there — it
-   does not clear the approval, because "this changed" and "this is no longer approved"
-   are different statements and only a human gets to make the second one.
+4. **It never DECIDES anything.** It carries the signature a human already made —
+   the sheet's per-row lock — into the entry's approval fields, and no further. When
+   a row changes underneath an approval it raises ``changed_after_approval`` and stops
+   there; it does not clear the approval, because "this changed" and "this is no longer
+   approved" are different statements and only a human gets to make the second one.
+   Seeding runs only while an entry is still Unapproved, so a decision taken on the
+   approvals screen is never overwritten by a later sweep.
 """
 
 import hashlib
@@ -108,12 +111,19 @@ def is_real_row(row, amount_field="amount"):
     return False
 
 
+# The lock is approval state, not a source fact, and approving now writes it back
+# to the row. If it stayed in the fingerprint, approving an entry would change its
+# own hash and the next sweep would raise changed_after_approval against it — the
+# approval flagging itself as suspicious.
+_NOT_SOURCE_FACTS = ("locked", "locked_by")
+
+
 def row_hash(row, amount_field):
     """Fingerprint of the source facts. Lets a sweep skip rows that have not moved."""
     material = {f: str(row.get(f) or "") for f in (
         "txn_date", "recipient", "category", "cancelled", "cancel_remark", "notes",
         "pc_received", "etr_received", "receipt", "entry_type",
-    ) + PAYLOAD_FIELDS}
+    ) + tuple(f for f in PAYLOAD_FIELDS if f not in _NOT_SOURCE_FACTS)}
     material["amount"] = f"{flt(row.get(amount_field)):.2f}"
     return hashlib.md5(json.dumps(material, sort_keys=True).encode()).hexdigest()
 

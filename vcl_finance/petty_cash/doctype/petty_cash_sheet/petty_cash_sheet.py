@@ -213,15 +213,23 @@ class PettyCashSheet(Document):
         """ORM-layer per-ROW lock, orthogonal to the week-level ``guard_locked_write``.
 
         A row with ``locked = 1`` is frozen: live, counted, and part of the sheet —
-        just immutable. The custodian may TICK a row to lock it; only an Accounts
-        Manager may untick it, edit it, or delete it.
+        just immutable. Only an Accounts Manager may tick it, untick it, edit it or
+        delete it.
+
+        Ticking used to be open to whoever could write the sheet. That was defensible
+        while the tick meant only "this row is settled" — but it is now the per-line
+        APPROVAL: the mirror reads ``locked`` and stamps the entry Approved with
+        ``locked_by`` as the approver. Leaving the tick open would let the custodian
+        who entered a payment approve it themselves, which is precisely what the
+        single Finance signature exists to prevent, and it would walk straight past
+        the permlevel-1 guard on the entry's own approval fields.
 
         This is the only real enforcement point. The Compass grid saves the FULL
         document via the Frappe REST API, bypassing every ``api.py`` helper, so a
         UI-only lock would be trivially defeated.
 
         Rules, per child row, matched on the child ``name``:
-          - old row unlocked → anything goes, including ticking it locked;
+          - old row unlocked → anything goes EXCEPT ticking it locked;
           - old row locked + Accounts Manager → anything goes, including unticking;
           - old row locked + anyone else → the row must be byte-for-byte unchanged
             across LOCK_COMPARE_FIELDS, and must still be present (no delete).
@@ -271,6 +279,12 @@ class PettyCashSheet(Document):
                 was_locked = cint(old_rows[name].get("locked")) if name in old_rows else 0
                 now_locked = cint(new.get("locked"))
                 if now_locked and not was_locked:
+                    if not is_am:
+                        frappe.throw(
+                            _("Ticking a row signs it off. Only an Accounts Manager "
+                              "can approve a petty cash line."),
+                            frappe.PermissionError,
+                        )
                     new.locked_by = frappe.session.user
                     new.locked_on = frappe.utils.now()
                 elif was_locked and not now_locked:

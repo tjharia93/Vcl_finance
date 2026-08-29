@@ -81,7 +81,7 @@ TABLE_MAP = {
 # Everything the typed columns do not carry. Kept as JSON so no source fact is lost
 # on the way across, and so phase 4 can rebuild a child row from an entry.
 PAYLOAD_FIELDS = (
-    "voucher_no", "vehicle", "day_idx", "slot", "kind", "row_idx",
+    "voucher_no", "vehicle", "day_idx", "slot", "kind", "row_idx", "locked_by",
     "staff_id", "reason", "paye", "amount_signed",
     "recipient_signed", "authorised_signed", "locked",
 )
@@ -162,6 +162,13 @@ def _entry_values(sheet, table, row):
     return {
         "doctype": "Petty Cash Entry",
         "txn_date": txn_date,
+        # The 🔒 tick on the sheet's row IS the per-line sign-off, and has been for
+        # months — 325 rows carry it. Mirroring it into the payload only, as this
+        # first did, threw that history away and would have asked Finance to
+        # re-approve work they had already approved once.
+        "locked": 1 if row.get("locked") else 0,
+        "locked_by": row.get("locked_by"),
+        "locked_on": row.get("locked_on"),
         "float": sheet.get("float") or "Cash",
         "source_type": _source_type_for(table, row),
         "source_key": (row.get(key_field) or "") if key_field else "",
@@ -183,6 +190,36 @@ def _entry_values(sheet, table, row):
         "sync_state": "Mirrored",
         "payload": json.dumps(payload, sort_keys=True, default=str),
     }
+
+
+def _seed_approval(values):
+    """Carry the sheet's per-row sign-off into the entry's approval fields.
+
+    Two states arrive from the sheet and both were being dropped:
+
+    - ``locked`` is the tick Finance puts against a line once they have checked
+      it. It is the per-line approval that already exists, so an entry mirrored
+      from a locked row starts Approved, stamped with whoever ticked it and when.
+      Rows locked before ``locked_by`` was recorded carry no approver — better a
+      blank name than a wrong one.
+    - ``cancelled`` is a void. Status rides ALONGSIDE the flag rather than
+      replacing it, because every total filters on ``cancelled``; a voided row
+      that read Unapproved sat in the queue's own reports as though it were
+      waiting for someone.
+
+    Only ever called while the entry is still Unapproved, so it seeds and never
+    overrides a decision a human made on the approvals screen.
+    """
+    locked = values.pop("locked", 0)
+    locked_by = values.pop("locked_by", None)
+    locked_on = values.pop("locked_on", None)
+    if values.get("cancelled"):
+        values["status"] = "Void"
+        return
+    if locked:
+        values["status"] = "Approved"
+        values["approved_by"] = locked_by or None
+        values["approved_on"] = locked_on or None
 
 
 def mirror_sheet(sheet, raise_on_error=False):
@@ -213,6 +250,7 @@ def mirror_sheet(sheet, raise_on_error=False):
                 prior = existing.get(row.get("name"))
 
                 if prior is None:
+                    _seed_approval(values)
                     doc = frappe.get_doc(values)
                     doc.flags.ignore_permissions = True   # permlevel-1 origin_* fields
                     doc.insert(ignore_permissions=True)
@@ -228,6 +266,13 @@ def mirror_sheet(sheet, raise_on_error=False):
                 # more. Clearing the approval is a human decision, not a sweep's.
                 if doc.status == "Approved" and prior["origin_hash"] != values["origin_hash"]:
                     values["changed_after_approval"] = 1
+                # Seed from the lock only while nothing has decided yet. An entry
+                # approved on the approvals screen keeps its own approver.
+                if doc.status == "Unapproved":
+                    _seed_approval(values)
+                else:
+                    for k in ("locked", "locked_by", "locked_on"):
+                        values.pop(k, None)
                 for field, value in values.items():
                     if field != "doctype":
                         doc.set(field, value)

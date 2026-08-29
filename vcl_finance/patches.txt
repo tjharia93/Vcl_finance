@@ -6,4 +6,11 @@
 [post_model_sync]
 vcl_finance.petty_cash.patches.migrate_voucher_category_and_wages_type
 vcl_finance.petty_cash.patches.backfill_petty_cash_entries
-vcl_finance.petty_cash.patches.reseed_entry_approval_from_lock
+# Re-run marker. The seed-only version of this patch is already stamped done in
+# the Patch Log, and executed() matches on the FULL string — so the two-way
+# version added in 2339e61 would never run. execute_patch() imports only the
+# first whitespace token, so the marker makes this a new key and nothing else.
+# It matters: 65 approvals made on the screen before the writeback deployed have
+# an unlocked row, which the new invariant reads as unsigned, and the next sweep
+# would silently revoke them.
+vcl_finance.petty_cash.patches.reseed_entry_approval_from_lock #2026-08-29-two-way

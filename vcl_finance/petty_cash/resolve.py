@@ -26,7 +26,19 @@ rather than discovered on the first posting run.
 
 import frappe
 
+# The default, not the only one. Four companies share this system; a sheet says
+# which it belongs to and the entry carries it.
 COMPANY = "Vimit Converters Limited"
+
+# QuickBooks holds ONE of the four companies' books. A Bahati line is a real petty
+# cash line with a real ERPNext account and simply has nowhere to go in QBO — that
+# is a fact about the books, not a failure, and the screen should say so rather
+# than showing a blank column that reads like something is broken.
+QBO_COMPANIES = {"Vimit Converters Limited"}
+
+
+def posts_to_qbo(company):
+    return (company or COMPANY) in QBO_COMPANIES
 
 # What a resolution can say. Only POSTS reaches a journal.
 POSTS = "posts"
@@ -65,7 +77,7 @@ def _map_row(company, source_type, source_key):
     return default[0] if default else None
 
 
-def resolve(entry, company=COMPANY):
+def resolve(entry, company=None):
     """Resolve one entry (a dict or a Document) to its route.
 
     Returns ``{outcome, erp_account, qbo_account, tax_code, reason, map_row}``.
@@ -73,6 +85,7 @@ def resolve(entry, company=COMPANY):
     with the pair named, which is more useful than a default account would be.
     """
     get = entry.get if isinstance(entry, dict) else (lambda k, d=None: entry.get(k, d))
+    company = company or get("company") or COMPANY
 
     if get("cancelled"):
         return {"outcome": VOID, "erp_account": None, "qbo_account": None,
@@ -104,8 +117,9 @@ def resolve(entry, company=COMPANY):
                 "reason": f"The mapping for {pair} carries no account", "map_row": row["name"]}
 
     return {"outcome": POSTS, "erp_account": row.get("erp_account"),
-            "qbo_account": row.get("qbo_account"), "tax_code": row.get("qbo_tax_code"),
-            "reason": None, "map_row": row["name"]}
+            "qbo_account": row.get("qbo_account") if posts_to_qbo(company) else None,
+            "tax_code": row.get("qbo_tax_code"), "reason": None,
+            "qbo": posts_to_qbo(company), "map_row": row["name"]}
 
 
 @frappe.whitelist()
@@ -127,7 +141,7 @@ def routes_for_week(week_ending, float_name=None, **kwargs):
     entries = frappe.get_all(
         "Petty Cash Entry", filters=filters,
         fields=["name", "source_type", "source_key", "cancelled", "amount",
-                "cash_in", "status"],
+                "cash_in", "status", "company"],
         limit_page_length=0,
     )
 
@@ -139,7 +153,11 @@ def routes_for_week(week_ending, float_name=None, **kwargs):
             "erp_account": r["erp_account"],
             "qbo_account": r["qbo_account"],
             "reason": r["reason"],
+            "qbo": bool(r.get("qbo")),
         }
         tally[r["outcome"]] = tally.get(r["outcome"], 0) + 1
 
-    return {"routes": routes, "tally": tally, "entries": len(entries)}
+    companies = sorted({e.get("company") or COMPANY for e in entries})
+    return {"routes": routes, "tally": tally, "entries": len(entries),
+            "companies": companies,
+            "qbo": all(posts_to_qbo(c) for c in companies) if companies else True}

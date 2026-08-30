@@ -180,6 +180,7 @@ def _entry_values(sheet, table, row):
         "locked_by": row.get("locked_by"),
         "locked_on": row.get("locked_on"),
         "float": sheet.get("float") or "Cash",
+        "company": sheet.get("company") or "Vimit Converters Limited",
         "source_type": _source_type_for(table, row),
         # A cash-IN voucher is a Replenishment, and a replenishment has no
         # sub-type — but it still carries whatever category the custodian happened

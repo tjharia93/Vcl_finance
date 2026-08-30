@@ -12,6 +12,7 @@
   "txn_date",
   "week_ending",
   "float",
+  "company",
   "col_entry_a",
   "source_type",
   "source_key",
@@ -95,6 +96,15 @@
    "default": "Cash",
    "in_list_view": 1,
    "search_index": 1
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "label": "Company",
+   "default": "Vimit Converters Limited",
+   "search_index": 1,
+   "description": "Carried from the sheet. Decides which Posting Map rows apply and whether this line reaches QuickBooks at all."
   },
   {
    "fieldname": "col_entry_a",

@@ -14,6 +14,7 @@
   "week_no",
   "week_ending",
   "float",
+  "company",
   "col_break_header",
   "custodian",
   "custodian_name",
@@ -95,6 +96,17 @@
    "in_list_view": 1,
    "in_standard_filter": 1,
    "description": "Which petty-cash float this sheet covers. One sheet per (Week Ending, Float)."
+  },
+  {
+   "fieldname": "company",
+   "fieldtype": "Link",
+   "options": "Company",
+   "label": "Company",
+   "default": "Vimit Converters Limited",
+   "reqd": 1,
+   "in_list_view": 0,
+   "search_index": 1,
+   "description": "Whose books this float belongs to. Four companies share this system; the accounts a line posts to are mapped per company, and only Vimit Converters Limited is kept in QuickBooks."
   },
   {
    "fieldname": "col_break_header",

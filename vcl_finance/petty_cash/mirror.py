@@ -181,7 +181,13 @@ def _entry_values(sheet, table, row):
         "locked_on": row.get("locked_on"),
         "float": sheet.get("float") or "Cash",
         "source_type": _source_type_for(table, row),
-        "source_key": (row.get(key_field) or "") if key_field else "",
+        # A cash-IN voucher is a Replenishment, and a replenishment has no
+        # sub-type — but it still carries whatever category the custodian happened
+        # to leave on the row. Copying that gave "Replenishment · OT" and
+        # "Replenishment · TG", which are not routes, just noise that would have
+        # demanded three map rows for one thing.
+        "source_key": "" if (table == "vouchers" and row.get("cash_in"))
+                      else ((row.get(key_field) or "") if key_field else ""),
         "category": row.get("category") if table == "vouchers" else None,
         "recipient": row.get("recipient"),
         "amount": flt(row.get(amount_field)),

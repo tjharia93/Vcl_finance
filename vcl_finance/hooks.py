@@ -33,6 +33,17 @@ doc_events = {
     },
 }
 
+# Scheduled jobs
+# --------------
+# One weekly job: read what Finance actually chose when approving, and propose the
+# map changes that follow. It only reads and only proposes — see override_review
+# for why an agent that rewrote the map on its own would be the wrong design.
+scheduler_events = {
+    "weekly": [
+        "vcl_finance.petty_cash.override_review.weekly",
+    ],
+}
+
 # Fixtures
 # --------
 # Ship the restricted "Petty Cash User" role (Phase 5 login). Filtered so we

@@ -157,3 +157,86 @@ def summary(from_date=None, to_date=None):
     lines.append("Nothing here has been changed. Each proposal is a Posting Map row "
                  "for a person to set and approve.")
     return "\n".join(lines)
+
+
+# ── the weekly run ────────────────────────────────────────────────────────────
+# Wired to Frappe's weekly scheduler rather than to a cron on the intranet box or a
+# cloud agent, for one reason: this job needs to read Petty Cash Entry, and inside
+# the app that is free. Anything outside would need an API token held somewhere,
+# and a credential in a scheduler config is a worse problem than a late report.
+#
+# The scheduler is paused during Frappe Cloud deploys, so a week can be missed.
+# That is acceptable here and nowhere near acceptable for the mirror: this job
+# only reads, only proposes, and the same evidence is still there next week.
+
+def weekly():
+    """Look at the last eight weeks of approvals and mail the proposals out.
+
+    Silent when there is nothing to propose. A weekly mail that says "nothing to
+    change" every week trains people to delete it unread, and then the one that
+    matters goes with it.
+    """
+    try:
+        result = review()
+    except Exception:
+        frappe.log_error(title="Petty cash override review failed",
+                         message=frappe.get_traceback())
+        return
+
+    if result.get("nothing_to_do"):
+        frappe.logger().info("petty cash override review: nothing to propose")
+        return
+
+    recipients = _finance_recipients()
+    if not recipients:
+        frappe.log_error(title="Petty cash override review: nobody to tell",
+                         message="No enabled user holds Accounts Manager.")
+        return
+
+    n = len(result["findings"])
+    try:
+        frappe.sendmail(
+            recipients=recipients,
+            subject=f"Petty cash: {n} suggested mapping change{'s' if n != 1 else ''}",
+            message=_as_html(result),
+            reference_doctype="Posting Map",
+            now=False,
+        )
+    except Exception:
+        # A failed send must not lose the finding — the log is the fallback copy.
+        frappe.log_error(title="Petty cash override review: could not send",
+                         message=summary() + "\n\n" + frappe.get_traceback())
+
+
+def _finance_recipients():
+    """Whoever may actually act on a proposal — the same roles that approve."""
+    users = frappe.get_all(
+        "Has Role", filters={"role": "Accounts Manager", "parenttype": "User"},
+        fields=["parent"], limit_page_length=0,
+    )
+    out = []
+    for u in {r["parent"] for r in users}:
+        if frappe.db.get_value("User", u, "enabled") and "@" in u and ".test" not in u:
+            out.append(u)
+    return sorted(out)
+
+
+def _as_html(result):
+    esc = frappe.utils.escape_html
+    parts = [
+        f"<p>Petty cash mapping review, {esc(result['from_date'])} to {esc(result['to_date'])}.<br>",
+        f"{result['approved_lines']} approved lines, {result['overridden_lines']} re-coded by hand.</p>",
+        "<ul>",
+    ]
+    for f in result["findings"]:
+        parts.append(f"<li><b>{esc(f['kind'].replace('_', ' '))}</b> — {esc(f['headline'])}")
+        if f.get("reasons"):
+            parts.append("<br><i>reasons given: " + esc(" · ".join(f["reasons"])) + "</i>")
+        if f.get("spread"):
+            parts.append("<br>" + "<br>".join(
+                f"{n} x {esc(a)} (KES {v:,.0f})" for a, n, v in f["spread"]))
+        parts.append("</li>")
+    parts.append("</ul>")
+    parts.append("<p><b>Nothing has been changed.</b> Each of these is a Posting Map row "
+                 "for a person to set and approve.</p>")
+    return "".join(parts)

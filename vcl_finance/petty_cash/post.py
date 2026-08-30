@@ -45,6 +45,11 @@ from vcl_finance.petty_cash.api import PETTY_PRIV
 FLOAT_CASH_ACCOUNT = {
     ("Vimit Converters Limited", "Cash"): "1110 - Cash - VCL",
     ("Vimit Converters Limited", "Hauz-Pay"): "Hauz-Pay Wallet - VCL",
+    # One tin, but the money belongs to whoever the line was for. A Bahati line
+    # credits Bahati's cash, and that is the whole reason this is keyed on the
+    # pair — crediting it to Vimit's would still balance, which is what makes it
+    # the dangerous failure rather than a loud one.
+    ("BAHATI VENTURES LIMITED", "Cash"): "Cash - BVL",
 }
 
 

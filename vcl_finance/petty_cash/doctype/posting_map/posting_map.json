@@ -13,6 +13,8 @@
   "column_break_key",
   "is_default",
   "approved",
+  "never_post",
+  "never_post_reason",
   "section_break_erp",
   "erp_account",
   "column_break_erp",
@@ -52,7 +54,7 @@
    "length": 40,
    "reqd": 1,
    "in_list_view": 1,
-   "description": "The specific value within that family — e.g. TG / TE / SE / OA / FD / GP / OT for a Voucher Category, or Wage / Overtime / Piecework / Commission for a Wages Entry. For families with only one variant (Parking, Bike Fuel, Forklift, Loan) repeat the Source Type here."
+   "description": "The specific value within that family \u2014 e.g. TG / TE / SE / OA / FD / GP / OT for a Voucher Category, or Wage / Overtime / Piecework / Commission for a Wages Entry. For families with only one variant (Parking, Bike Fuel, Forklift, Loan) repeat the Source Type here."
   },
   {
    "fieldname": "column_break_key",
@@ -64,7 +66,7 @@
    "label": "Use as Default",
    "default": "1",
    "in_list_view": 1,
-   "description": "Ticked, the posting run pre-fills this account automatically. Unticked, the row is remembered but never applied on its own — the account must be chosen each time."
+   "description": "Ticked, the posting run pre-fills this account automatically. Unticked, the row is remembered but never applied on its own \u2014 the account must be chosen each time."
   },
   {
    "fieldname": "approved",
@@ -73,6 +75,20 @@
    "default": "0",
    "in_list_view": 1,
    "description": "Nothing posts through an unapproved map row. Approving is the deliberate act that lets money reach a ledger."
+  },
+  {
+   "fieldname": "never_post",
+   "fieldtype": "Check",
+   "label": "Never post",
+   "default": "0",
+   "description": "This route is deliberately kept out of the books - commission and piecework while the treatment is open, M-Pesa and bank charges that belong with bank charges. A never-post line still appears on every report and still counts toward the sheet; it simply never reaches a journal."
+  },
+  {
+   "fieldname": "never_post_reason",
+   "fieldtype": "Small Text",
+   "label": "Why it never posts",
+   "depends_on": "never_post",
+   "description": "Shown to whoever is approving the line, so a held route explains itself."
   },
   {
    "fieldname": "section_break_erp",
@@ -95,7 +111,7 @@
    "fieldtype": "Select",
    "label": "Party Type",
    "options": "\nEmployee\nSupplier\nCustomer",
-   "description": "Required when the ERP account is Receivable or Payable — e.g. Employee Advances. The party itself comes from the petty cash row."
+   "description": "Required when the ERP account is Receivable or Payable \u2014 e.g. Employee Advances. The party itself comes from the petty cash row."
   },
   {
    "fieldname": "section_break_qbo",
@@ -128,7 +144,7 @@
    "fieldname": "notes",
    "fieldtype": "Small Text",
    "label": "Notes",
-   "description": "Why this account was chosen. Worth a line — the next person to look will not remember."
+   "description": "Why this account was chosen. Worth a line \u2014 the next person to look will not remember."
   }
  ],
  "links": [],

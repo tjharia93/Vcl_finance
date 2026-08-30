@@ -38,12 +38,25 @@ from frappe.utils import flt, now_datetime
 from vcl_finance.petty_cash import resolve as R
 from vcl_finance.petty_cash.api import PETTY_PRIV
 
-# Where the cash sits. A float with no account here cannot post at all, and says so
-# rather than falling back to somebody else's cash account.
+# Where the cash sits, per COMPANY per float. One tin serves four companies, so a
+# float alone cannot name the account: crediting BVL spend to "1110 - Cash - VCL"
+# would put Bahati's cash movement in Vimit's books, and the journal would still
+# balance — which is exactly why it has to be keyed on both.
 FLOAT_CASH_ACCOUNT = {
-    "Cash": "1110 - Cash - VCL",
-    "Hauz-Pay": "Hauz-Pay Wallet - VCL",
+    ("Vimit Converters Limited", "Cash"): "1110 - Cash - VCL",
+    ("Vimit Converters Limited", "Hauz-Pay"): "Hauz-Pay Wallet - VCL",
 }
+
+
+def cash_account(company, float_name):
+    """The float's account in this company's books, or None if there isn't one.
+
+    None is a refusal, not a default. A company nobody has set up a petty cash
+    account for must stop the run and say so; falling back to another company's
+    cash account is the one failure here that produces a balanced, plausible,
+    wrong journal.
+    """
+    return FLOAT_CASH_ACCOUNT.get((company or R.COMPANY, float_name))
 
 # A line's own state in the run.
 POSTED = "posted"      # already in a journal
@@ -173,7 +186,8 @@ def preview_week(week_ending, float_name=None, **kwargs):
         "journals": [{"name": j, "submitted": docstatus.get(j) == 1} for j in journals],
         "companies": sorted({e.get("company") or R.COMPANY for e in b[READY]}),
         "cash_account_missing": sorted(
-            {e["float"] for e in b[READY] if e["float"] not in FLOAT_CASH_ACCOUNT}),
+            {f"{e.get('company') or R.COMPANY} · {e['float']}" for e in b[READY]
+             if not cash_account(e.get("company"), e["float"])}),
     }
 
 
@@ -215,11 +229,11 @@ def post_week(week_ending, float_name=None, **kwargs):
 
     made, stamped = [], 0
     for company, lines in sorted(by_company.items()):
-        floats = {e["float"] for e in lines}
-        missing = floats - set(FLOAT_CASH_ACCOUNT)
+        missing = sorted({e["float"] for e in lines if not cash_account(company, e["float"])})
         if missing:
-            frappe.throw(_("No cash account is configured for float {0}.")
-                         .format(", ".join(sorted(missing))))
+            frappe.throw(_("No petty cash account is set up for {0} — float {1}. "
+                           "Add one before posting to this company.")
+                         .format(company, ", ".join(missing)))
 
         tag_base = f"PC-{float_name or 'ALL'}-{week_ending}"
         je, tag = _open_journal(tag_base, company, week_ending)
@@ -241,7 +255,7 @@ def post_week(week_ending, float_name=None, **kwargs):
 
         out_total, in_total = {}, {}
         for e in lines:
-            cash = FLOAT_CASH_ACCOUNT[e["float"]]
+            cash = cash_account(company, e["float"])
             amt = flt(e["amount"], 2)
             remark = f"{e['txn_date'] or ''} {_subject(e)} [{e['name']}]".strip()
             if e.get("cash_in"):

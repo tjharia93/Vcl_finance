@@ -117,6 +117,16 @@ def is_real_row(row, amount_field="amount"):
 # approval flagging itself as suspicious.
 _NOT_SOURCE_FACTS = ("locked", "locked_by")
 
+# Seeded when the entry is created, never rewritten by a later sweep.
+#
+# `company` is a DECISION, not a source fact. Petty cash is one tin serving four
+# companies, and which one a line belongs to is chosen by the approver on the
+# line — the sheet has no per-row company and neither did Gen 1, so the sheet's
+# value is only ever a starting guess. Leaving it in the update path meant a
+# picked BVL silently reverted to the sheet's company on the next save, and the
+# only symptom would have been Bahati spend quietly sitting in VCL's books.
+_SEEDED_ONCE = ("company",)
+
 
 def row_hash(row, amount_field):
     """Fingerprint of the source facts. Lets a sweep skip rows that have not moved."""
@@ -335,8 +345,9 @@ def mirror_sheet(sheet, raise_on_error=False):
                 # Reconcile the signature both ways — see _reconcile_approval.
                 _reconcile_approval(values, doc.status)
                 for field, value in values.items():
-                    if field != "doctype":
-                        doc.set(field, value)
+                    if field == "doctype" or field in _SEEDED_ONCE:
+                        continue
+                    doc.set(field, value)
                 doc.flags.ignore_permissions = True
                 doc.save(ignore_permissions=True)
                 stats["updated"] += 1

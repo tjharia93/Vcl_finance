@@ -217,7 +217,7 @@ def void_entry(entry, remark=None):
     return {"entry": doc.name, "status": doc.status, "cancelled": doc.cancelled}
 
 @frappe.whitelist(methods=["POST"])
-def set_line_account(entry, account, reason=None, apply_to_route=0):
+def set_line_account(entry, account, reason=None, apply_to_route=0, company=None):
     """Choose where one line posts — and optionally make that the rule.
 
     The map proposes and the approver disposes. Most lines are approved with the
@@ -237,6 +237,23 @@ def set_line_account(entry, account, reason=None, apply_to_route=0):
         frappe.throw(_("No such account: {0}").format(account))
 
     doc = _get(entry)
+
+    # Company comes FIRST, because everything after it is keyed on company: the
+    # Posting Map row, the account's own company, and which books this line even
+    # reaches — only Vimit is in QuickBooks. One tin serves four companies and
+    # neither the sheet nor Gen 1 ever had a per-row company, so this is the only
+    # place the true one is ever stated.
+    if company and company != doc.company:
+        if not frappe.db.exists("Company", company):
+            frappe.throw(_("No such company: {0}").format(company))
+        doc.company = company
+
+    if frappe.db.get_value("Account", account, "company") != doc.company:
+        frappe.throw(
+            _("{0} belongs to another company. Pick an account in {1}'s books, or "
+              "change the company on this line first.").format(account, doc.company),
+            title=_("Wrong company"))
+
     from vcl_finance.petty_cash.resolve import resolve
     proposed = resolve(doc.as_dict()).get("erp_account")
 
@@ -270,14 +287,18 @@ def _teach_map(doc, account):
     st, sk = doc.source_type, (doc.source_key or "")
     if not st:
         return None
+    # The line's OWN company, not the default. A map is per company — teaching it
+    # from a Bahati line used to write a Vimit row, which would then propose a
+    # Vimit account for every future Bahati line of that kind.
     from vcl_finance.petty_cash.resolve import COMPANY
+    company = doc.company or COMPANY
     name = frappe.db.get_value(
-        "Posting Map", {"company": COMPANY, "source_type": st, "source_key": sk}, "name")
+        "Posting Map", {"company": company, "source_type": st, "source_key": sk}, "name")
     if name:
         row = frappe.get_doc("Posting Map", name)
     else:
         row = frappe.new_doc("Posting Map")
-        row.company, row.source_type, row.source_key = COMPANY, st, sk
+        row.company, row.source_type, row.source_key = company, st, sk
         # A blank key is the family default — how Parking is mapped once rather
         # than once per number plate.
         row.is_default = 1 if not sk else 0

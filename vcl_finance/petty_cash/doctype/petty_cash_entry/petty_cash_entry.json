@@ -35,6 +35,10 @@
   "withdrawn_by",
   "withdrawn_on",
   "withdrawal_reason",
+  "section_posting",
+  "mapped_account",
+  "posting_account",
+  "override_reason",
   "section_ask",
   "receipt_asked_from",
   "receipt_asked_on",
@@ -235,6 +239,36 @@
    "label": "Withdrawal Reason",
    "permlevel": 1,
    "description": "Required when status moves to Withdrawn."
+  },
+  {
+   "fieldname": "section_posting",
+   "fieldtype": "Section Break",
+   "label": "Posting"
+  },
+  {
+   "fieldname": "mapped_account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "label": "Account the map proposed",
+   "read_only": 1,
+   "permlevel": 1,
+   "description": "What Posting Map resolved at the moment of approval. Kept even when it is overridden, because the gap between what the map said and what a person chose IS the signal the weekly review reads."
+  },
+  {
+   "fieldname": "posting_account",
+   "fieldtype": "Link",
+   "options": "Account",
+   "label": "Posts to",
+   "permlevel": 1,
+   "search_index": 1,
+   "description": "The account this line will actually post to. Equal to mapped_account unless somebody deliberately chose otherwise."
+  },
+  {
+   "fieldname": "override_reason",
+   "fieldtype": "Small Text",
+   "label": "Why the override",
+   "permlevel": 1,
+   "description": "Required when the chosen account differs from the mapped one. An override with no reason cannot be reviewed, and an unreviewable override quietly becomes the rule."
   },
   {
    "fieldname": "section_ask",

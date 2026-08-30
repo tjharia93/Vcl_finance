@@ -215,3 +215,76 @@ def void_entry(entry, remark=None):
     doc.status = "Void"
     doc.save()
     return {"entry": doc.name, "status": doc.status, "cancelled": doc.cancelled}
+
+@frappe.whitelist(methods=["POST"])
+def set_line_account(entry, account, reason=None, apply_to_route=0):
+    """Choose where one line posts — and optionally make that the rule.
+
+    The map proposes and the approver disposes. Most lines are approved with the
+    proposed account untouched; this is for the ones that are wrong, and for the
+    ones the map has no answer for yet.
+
+    ``apply_to_route`` is the part that makes the map improve rather than be
+    bypassed: it writes the choice back to the ``Posting Map`` row for this line's
+    (source_type, source_key) pair, so the next line of the same kind arrives
+    already correct. The row is created UNAPPROVED — teaching the map is not the
+    same act as agreeing the map, and the second one stays deliberate.
+    """
+    _assert_finance()
+    if not account:
+        frappe.throw(_("Pick an account."))
+    if not frappe.db.exists("Account", account):
+        frappe.throw(_("No such account: {0}").format(account))
+
+    doc = _get(entry)
+    from vcl_finance.petty_cash.resolve import resolve
+    proposed = resolve(doc.as_dict()).get("erp_account")
+
+    if proposed and account != proposed and not (reason or "").strip():
+        frappe.throw(
+            _("This differs from the mapped account ({0}). Say why — an override "
+              "nobody can review quietly becomes the rule.").format(proposed),
+            title=_("Reason required"),
+        )
+
+    doc.mapped_account = proposed
+    doc.posting_account = account
+    doc.override_reason = (reason or "").strip() or None
+    doc.save()
+
+    promoted = None
+    if int(apply_to_route or 0):
+        promoted = _teach_map(doc, account)
+
+    return {"entry": doc.name, "posting_account": account,
+            "mapped_account": proposed, "taught": promoted}
+
+
+def _teach_map(doc, account):
+    """Write an approver's choice onto the route's map row, unapproved.
+
+    Creates the row if the pair has none. Deliberately never flips ``approved``:
+    a person choosing an account for one line is evidence, not a decision about
+    every future line, and the map's own gate is what turns one into the other.
+    """
+    st, sk = doc.source_type, (doc.source_key or "")
+    if not st:
+        return None
+    from vcl_finance.petty_cash.resolve import COMPANY
+    name = frappe.db.get_value(
+        "Posting Map", {"company": COMPANY, "source_type": st, "source_key": sk}, "name")
+    if name:
+        row = frappe.get_doc("Posting Map", name)
+    else:
+        row = frappe.new_doc("Posting Map")
+        row.company, row.source_type, row.source_key = COMPANY, st, sk
+        # A blank key is the family default — how Parking is mapped once rather
+        # than once per number plate.
+        row.is_default = 1 if not sk else 0
+    row.erp_account = account
+    row.approved = 0
+    row.notes = ((row.notes or "") + f"\nSet from {doc.name} on "
+                 f"{frappe.utils.nowdate()} by {frappe.session.user}").strip()
+    row.flags.ignore_permissions = True
+    row.save(ignore_permissions=True)
+    return row.name

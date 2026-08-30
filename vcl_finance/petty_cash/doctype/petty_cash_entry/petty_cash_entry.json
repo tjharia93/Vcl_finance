@@ -40,6 +40,8 @@
   "mapped_account",
   "posting_account",
   "override_reason",
+  "journal_entry",
+  "posted_on",
   "section_ask",
   "receipt_asked_from",
   "receipt_asked_on",
@@ -418,6 +420,24 @@
    "fieldname": "cancel_remark",
    "fieldtype": "Small Text",
    "label": "Cancel Remark"
+  },
+  {
+   "fieldname": "journal_entry",
+   "fieldtype": "Link",
+   "label": "Journal Entry",
+   "options": "Journal Entry",
+   "read_only": 1,
+   "permlevel": 1,
+   "search_index": 1,
+   "description": "The draft Journal Entry this line was posted into. Blank means this line has never been posted. Set by the posting run and by nothing else \u2014 it is the only record of what has already reached the books, and a hand-edit here would let a line post twice."
+  },
+  {
+   "fieldname": "posted_on",
+   "fieldtype": "Datetime",
+   "label": "Posted On",
+   "read_only": 1,
+   "permlevel": 1,
+   "description": "When the posting run picked this line up. Not the journal's posting date \u2014 that is the week ending."
   }
  ],
  "index_web_pages_for_search": 0,

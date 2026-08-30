@@ -198,3 +198,142 @@ def overlap_warning(week_ending, float_name=None, **kwargs):
             "otherwise the same spend lands twice."
         ),
     }
+
+
+# ── staging ───────────────────────────────────────────────────────────────────
+# Frappe Cloud stages; the CommandCentre runner pushes. Nothing below talks to
+# Intuit. This is the same shape stage_pi_to_queue.py uses for bills, with one
+# simplification: every lookup the payload needs — Posting Map, QBO Account Map —
+# already lives in Frappe, so the payload is built here rather than on the box,
+# and the runner only has to POST what it is given.
+
+import hashlib
+
+from frappe.utils import now_datetime
+
+from vcl_finance.petty_cash.api import PETTY_PRIV
+
+QUEUE = "QBO Petty Cash Journal"
+
+
+def _guard():
+    if not (set(frappe.get_roles()) & PETTY_PRIV):
+        frappe.throw(_("Only Accounts Managers can stage a QuickBooks journal."),
+                     frappe.PermissionError)
+
+
+def _hash(payload):
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()[:32]
+
+
+def _row_name(week_ending, float_name):
+    return f"QPCJ-{week_ending}-{float_name or 'ALL'}"
+
+
+@frappe.whitelist()
+def stage_week(week_ending, float_name=None, **kwargs):
+    """Put this week's QBO journal in the queue, UNAPPROVED.
+
+    Re-staging an already-pushed week is refused rather than quietly rebuilt: the
+    journal is in QuickBooks, and the place to change it is there.
+    """
+    _guard()
+    float_name = float_name or kwargs.get("float")
+    p = preview_qbo_journal(week_ending, float_name)
+
+    if not p["payload"]:
+        frappe.throw(_("There is nothing to send. Post the week to ERPNext first — "
+                       "the QuickBooks journal is built from what ERPNext posted."))
+
+    name = _row_name(week_ending, float_name)
+    if frappe.db.exists(QUEUE, name):
+        row = frappe.get_doc(QUEUE, name)
+        if row.qbo_journal_id:
+            frappe.throw(_("This week is already in QuickBooks as journal {0}. "
+                           "Change it there.").format(row.qbo_journal_id))
+    else:
+        row = frappe.new_doc(QUEUE)
+        row.week_ending, row.float = week_ending, float_name
+
+    row.company = R.COMPANY
+    row.doc_number = p["doc_number"]
+    row.erp_journals = ", ".join(p["erp_journals"])
+    row.entry_count = p["qbo_lines"]
+    row.total_out, row.total_in = p["out"], p["in"]
+    row.payload_json = json.dumps(p["payload"], indent=2)
+    row.payload_hash = _hash(p["payload"])
+    row.block_reason = "\n".join(
+        f"{b['lines']} line(s), KES {b['value']:,.0f} — {b['reason']}"
+        for b in p["blocked"]) or None
+    row.flags.ignore_permissions = True
+    row.save()
+    frappe.db.commit()
+
+    return {"queue_row": row.name, "approved": bool(row.approved),
+            "ready": p["ready"], "blocked": p["blocked"],
+            "doc_number": row.doc_number, "lines": row.entry_count,
+            "out": row.total_out, "in": row.total_in,
+            "warning": overlap_warning(week_ending, float_name)["message"]}
+
+
+@frappe.whitelist()
+def approve_push(queue_row):
+    """Agree that this payload may go to QuickBooks.
+
+    Separate from staging on purpose. Staging says "here is what it would be";
+    this says "send it". A row that still has a block_reason cannot be approved —
+    approving an incomplete journal is how a week reaches QBO short, and short is
+    worse than absent because it looks complete.
+    """
+    _guard()
+    row = frappe.get_doc(QUEUE, queue_row)
+    if row.qbo_journal_id:
+        frappe.throw(_("Already pushed as {0}.").format(row.qbo_journal_id))
+    if row.block_reason:
+        frappe.throw(_("Some lines have no QuickBooks account:\n{0}")
+                     .format(row.block_reason))
+    row.approved = 1
+    row.approved_by = frappe.session.user
+    row.approved_at = now_datetime()
+    row.flags.ignore_permissions = True
+    row.save()
+    frappe.db.commit()
+    return {"queue_row": row.name, "approved": True}
+
+
+@frappe.whitelist()
+def pending_push():
+    """What the runner should pick up. Approved, not yet pushed."""
+    return frappe.get_all(
+        QUEUE, filters={"approved": 1, "qbo_journal_id": ("is", "not set")},
+        fields=["name", "week_ending", "float", "company", "doc_number",
+                "entry_count", "total_out", "total_in", "payload_json",
+                "attempts", "error_message"],
+        order_by="week_ending asc", limit_page_length=0,
+    )
+
+
+@frappe.whitelist()
+def mark_pushed(queue_row, qbo_journal_id=None, qbo_sync_token=None, error=None):
+    """The runner's callback. Records the outcome, good or bad.
+
+    A failure is recorded on the row rather than raised, because the runner is a
+    batch: one journal QuickBooks rejects must not stop the rest, and the error
+    has to survive somewhere a person will actually see it.
+    """
+    row = frappe.get_doc(QUEUE, queue_row)
+    row.attempts = (row.attempts or 0) + 1
+    row.last_attempt_at = now_datetime()
+    if error:
+        row.error_message = str(error)[:2000]
+    else:
+        row.qbo_journal_id = qbo_journal_id
+        row.qbo_sync_token = qbo_sync_token
+        row.pushed_at = now_datetime()
+        row.error_message = None
+    row.flags.ignore_permissions = True
+    row.save()
+    frappe.db.commit()
+    return {"queue_row": row.name, "qbo_journal_id": row.qbo_journal_id}

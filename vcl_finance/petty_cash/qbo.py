@@ -95,13 +95,23 @@ def _lines(week_ending, float_name):
     return frappe.get_all(
         "Petty Cash Entry", filters=filters,
         fields=["name", "txn_date", "float", "company", "source_type", "source_key",
-                "recipient", "notes", "amount", "cash_in", "posting_account",
+                "recipient", "notes", "memo", "amount", "cash_in", "posting_account",
                 "qbo_account", "journal_entry"],
         order_by="txn_date asc, creation asc", limit_page_length=0,
     )
 
 
 def _describe(e):
+    """What the accountant reads against this line in QuickBooks.
+
+    A memo, when somebody wrote one, beats the derived text — "Trizah" says who was
+    paid and nothing about what for, and the person coding the line is the only one
+    who still knows. The entry id stays on either way: it is the only thread back
+    from a journal line to the voucher.
+    """
+    memo = (e.get("memo") or "").strip()
+    if memo:
+        return f"{memo} [{e['name']}]"
     who = (e.get("recipient") or e.get("notes") or e.get("source_key")
            or e.get("source_type") or "Petty cash")
     return f"{e.get('txn_date') or ''} {str(who)[:60]} [{e['name']}]".strip()

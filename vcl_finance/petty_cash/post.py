@@ -71,8 +71,12 @@ def _guard():
 
 
 def _subject(e):
-    """A few words so the accountant can tell the lines apart in the journal."""
-    for f in ("recipient", "notes", "source_key"):
+    """A few words so the accountant can tell the lines apart in the journal.
+
+    The memo leads when there is one. It is the same text QuickBooks gets, so the
+    two books read alike rather than describing the same payment two ways.
+    """
+    for f in ("memo", "recipient", "notes", "source_key"):
         v = (e.get(f) or "").strip()
         if v:
             return v[:80]
@@ -119,7 +123,7 @@ def _entries(week_ending, float_name):
     return frappe.get_all(
         "Petty Cash Entry", filters=filters,
         fields=["name", "txn_date", "float", "company", "source_type", "source_key",
-                "recipient", "notes", "amount", "cash_in", "status", "cancelled",
+                "recipient", "notes", "memo", "amount", "cash_in", "status", "cancelled",
                 "posting_account", "journal_entry", "posted_on"],
         order_by="txn_date asc, creation asc", limit_page_length=0,
     )

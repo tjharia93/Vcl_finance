@@ -218,7 +218,7 @@ def void_entry(entry, remark=None):
 
 @frappe.whitelist(methods=["POST"])
 def set_line_account(entry, account, reason=None, apply_to_route=0, company=None,
-                     qbo_account=None):
+                     qbo_account=None, memo=None):
     """Choose where one line posts — and optionally make that the rule.
 
     The map proposes and the approver disposes. Most lines are approved with the
@@ -276,6 +276,12 @@ def set_line_account(entry, account, reason=None, apply_to_route=0, company=None
         if not frappe.db.exists("QBO Account", qbo_account):
             frappe.throw(_("No such QuickBooks account: {0}").format(qbo_account))
         doc.qbo_account = qbo_account
+
+    # The memo rides to BOTH books, deliberately. The same payment described two
+    # different ways in two ledgers is how a tie-out turns into an argument.
+    # `is not None` rather than truthiness, so clearing a memo actually clears it.
+    if memo is not None:
+        doc.memo = (memo or "").strip()[:180] or None
     doc.save()
 
     promoted = None

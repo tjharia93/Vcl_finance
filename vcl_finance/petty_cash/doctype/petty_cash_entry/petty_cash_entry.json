@@ -40,6 +40,7 @@
   "mapped_account",
   "posting_account",
   "qbo_account",
+  "memo",
   "override_reason",
   "journal_entry",
   "posted_on",
@@ -448,6 +449,14 @@
    "permlevel": 1,
    "search_index": 1,
    "description": "The QuickBooks account this line posts to, chosen on the line at approval alongside the ERPNext one. Blank falls back to the shared QBO Account Map crosswalk, then to the route's Posting Map row. Only companies kept in QuickBooks use this at all."
+  },
+  {
+   "fieldname": "memo",
+   "fieldtype": "Data",
+   "label": "Memo on the journal line",
+   "length": 180,
+   "permlevel": 1,
+   "description": "What the accountant reads against this line in ERPNext and QuickBooks. Set at approval by whoever knows what the payment was actually for \u2014 the payee name alone often does not say. Blank falls back to the date and payee."
   }
  ],
  "index_web_pages_for_search": 0,

@@ -266,7 +266,22 @@ def preview_journal_entry(sheet_name):
 
 @frappe.whitelist()
 def make_draft_journal_entry(sheet_name):
-    """Create (or refresh) the **Draft** Journal Entry for a sheet.
+    """RETIRED. Superseded by ``petty_cash.post.post_week``.
+
+    Left in place rather than deleted so that anything still pointing at it gets
+    a sentence instead of an AttributeError. It must not run: it resolves
+    accounts through ``Petty Cash Category.gl_account`` and its own fallback
+    tables, which `resolve.py` deliberately does not consult, and it tags its
+    journal by SHEET while the live path tracks posting per LINE. A journal made
+    here would be invisible to the posting state and could double-post a week.
+
+    The docstring of what it used to do is kept below the raise, because the
+    account-resolution history in it is the reason the new one is shaped the
+    way it is.
+
+    ---
+
+    Create (or refresh) the **Draft** Journal Entry for a sheet.
 
     - Balanced: Dr each ERP expense account (grouped) / Cr the float cash account.
     - ``docstatus=0`` — NEVER submitted (VCL standing rule). The reviewer submits
@@ -277,6 +292,11 @@ def make_draft_journal_entry(sheet_name):
     - Lines whose ERP account can't be resolved are kept under the ``NEEDS ERP a/c``
       placeholder account so the figure is visible and the reviewer can't miss it.
     """
+    frappe.throw(_(
+        "This posting route has been retired. Petty cash now posts per line, from "
+        "the approvals screen — open the week and use Posting there."
+    ))
+
     if not frappe.has_permission("Petty Cash Sheet", "write", sheet_name):
         frappe.throw(_("Not permitted."), frappe.PermissionError)
 

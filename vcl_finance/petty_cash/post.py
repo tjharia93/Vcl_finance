@@ -272,8 +272,13 @@ def post_week(week_ending, float_name=None, **kwargs):
         for e in lines:
             if e.get("journal_entry") == je.name:
                 continue          # carried over — its posted_on is the truth
+            # Record the account it actually went to, not only that it went. A line
+            # that took the map's account had none of its own; leaving it blank
+            # would make the entry unable to answer "where did this post" once the
+            # map row changed underneath it.
             frappe.db.set_value("Petty Cash Entry", e["name"],
-                                {"journal_entry": je.name, "posted_on": stamp},
+                                {"journal_entry": je.name, "posted_on": stamp,
+                                 "posting_account": e["_account"]},
                                 update_modified=False)
             stamped += 1
 

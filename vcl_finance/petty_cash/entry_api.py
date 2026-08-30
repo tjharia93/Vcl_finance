@@ -217,7 +217,8 @@ def void_entry(entry, remark=None):
     return {"entry": doc.name, "status": doc.status, "cancelled": doc.cancelled}
 
 @frappe.whitelist(methods=["POST"])
-def set_line_account(entry, account, reason=None, apply_to_route=0, company=None):
+def set_line_account(entry, account, reason=None, apply_to_route=0, company=None,
+                     qbo_account=None):
     """Choose where one line posts — and optionally make that the rule.
 
     The map proposes and the approver disposes. Most lines are approved with the
@@ -267,17 +268,25 @@ def set_line_account(entry, account, reason=None, apply_to_route=0, company=None
     doc.mapped_account = proposed
     doc.posting_account = account
     doc.override_reason = (reason or "").strip() or None
+
+    # Both legs in one act. Picking the ERPNext account and then discovering at
+    # push time that the QuickBooks side has nowhere to go is two trips for one
+    # decision, and the second trip happens days later when the context is gone.
+    if qbo_account:
+        if not frappe.db.exists("QBO Account", qbo_account):
+            frappe.throw(_("No such QuickBooks account: {0}").format(qbo_account))
+        doc.qbo_account = qbo_account
     doc.save()
 
     promoted = None
     if int(apply_to_route or 0):
-        promoted = _teach_map(doc, account)
+        promoted = _teach_map(doc, account, qbo_account)
 
     return {"entry": doc.name, "posting_account": account,
             "mapped_account": proposed, "taught": promoted}
 
 
-def _teach_map(doc, account):
+def _teach_map(doc, account, qbo_account=None):
     """Write an approver's choice onto the route's map row, unapproved.
 
     Creates the row if the pair has none. Deliberately never flips ``approved``:
@@ -303,6 +312,8 @@ def _teach_map(doc, account):
         # than once per number plate.
         row.is_default = 1 if not sk else 0
     row.erp_account = account
+    if qbo_account:
+        row.qbo_account = qbo_account
     row.approved = 0
     row.notes = ((row.notes or "") + f"\nSet from {doc.name} on "
                  f"{frappe.utils.nowdate()} by {frappe.session.user}").strip()

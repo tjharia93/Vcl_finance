@@ -39,6 +39,7 @@
   "section_posting",
   "mapped_account",
   "posting_account",
+  "qbo_account",
   "override_reason",
   "journal_entry",
   "posted_on",
@@ -438,6 +439,15 @@
    "read_only": 1,
    "permlevel": 1,
    "description": "When the posting run picked this line up. Not the journal's posting date \u2014 that is the week ending."
+  },
+  {
+   "fieldname": "qbo_account",
+   "fieldtype": "Link",
+   "label": "Posts to in QuickBooks",
+   "options": "QBO Account",
+   "permlevel": 1,
+   "search_index": 1,
+   "description": "The QuickBooks account this line posts to, chosen on the line at approval alongside the ERPNext one. Blank falls back to the shared QBO Account Map crosswalk, then to the route's Posting Map row. Only companies kept in QuickBooks use this at all."
   }
  ],
  "index_web_pages_for_search": 0,

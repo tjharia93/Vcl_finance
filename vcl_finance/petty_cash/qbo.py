@@ -61,8 +61,16 @@ def doc_number(float_name, week_ending):
     return f"PC-{tag[:max(keep, 1)]}-{week_ending}"
 
 
-def _qbo_account(erp_account, source_type, source_key, company):
-    """(qbo_id, why_not). The shared crosswalk first, the local override second."""
+def _qbo_account(erp_account, source_type, source_key, company, chosen=None):
+    """(qbo_id, why_not). The line's own choice first, then the shared crosswalk.
+
+    The order mirrors the ERPNext side exactly, and for the same reason: an account
+    a person picked on the line at approval is the decision, and re-deriving it at
+    posting time would quietly discard it. The crosswalk is the fallback that makes
+    the common case need no choice at all.
+    """
+    if chosen:
+        return chosen, None
     if not erp_account:
         return None, "no ERP account on the line"
 
@@ -88,7 +96,7 @@ def _lines(week_ending, float_name):
         "Petty Cash Entry", filters=filters,
         fields=["name", "txn_date", "float", "company", "source_type", "source_key",
                 "recipient", "notes", "amount", "cash_in", "posting_account",
-                "journal_entry"],
+                "qbo_account", "journal_entry"],
         order_by="txn_date asc, creation asc", limit_page_length=0,
     )
 
@@ -117,7 +125,7 @@ def preview_qbo_journal(week_ending, float_name=None, **kwargs):
         if not R.posts_to_qbo(company):
             continue                    # a real line with no home in QBO, not an error
         acct, why = _qbo_account(e.get("posting_account"), e.get("source_type"),
-                                 e.get("source_key"), company)
+                                 e.get("source_key"), company, e.get("qbo_account"))
         amt = flt(e["amount"], 2)
         if not acct:
             b = blocked.setdefault(why, {"reason": why, "lines": 0, "value": 0.0})
@@ -337,3 +345,22 @@ def mark_pushed(queue_row, qbo_journal_id=None, qbo_sync_token=None, error=None)
     row.save()
     frappe.db.commit()
     return {"queue_row": row.name, "qbo_journal_id": row.qbo_journal_id}
+
+
+@frappe.whitelist()
+def suggest_qbo_account(erp_account=None, source_type=None, source_key=None, company=None):
+    """What the QuickBooks side would resolve to for this ERP account, and why.
+
+    Lets the approval screen show both legs at once instead of making somebody
+    discover at push time that half the week has nowhere to go in QBO. Read-only.
+    """
+    company = company or COMPANY
+    if not posts_to_qbo(company):
+        return {"qbo": False, "account": None, "label": None,
+                "reason": f"{company} is not kept in QuickBooks — ERPNext only."}
+    acct, why = _qbo_account(erp_account, source_type, source_key, company)
+    return {
+        "qbo": True, "account": acct,
+        "label": frappe.db.get_value("QBO Account", acct, "fully_qualified_name") if acct else None,
+        "reason": why,
+    }

@@ -252,6 +252,13 @@ def set_route_map(company, source_type, source_key=None, erp_account=None,
         doc.qbo_account = qbo_account or None
     if never_post is not None:
         doc.never_post = 1 if int(never_post or 0) else 0
+        # The reason is not optional on an exclusion, and this is the only place
+        # the screen can supply one — without this the validator refused every
+        # never_post row it was asked to save.
+        if doc.never_post and reason:
+            doc.never_post_reason = reason
+        if doc.never_post and not (doc.never_post_reason or "").strip():
+            frappe.throw(frappe._("Say why this route is kept out of the books."))
     if approved is not None:
         doc.approved = 1 if int(approved or 0) else 0
     if reason:

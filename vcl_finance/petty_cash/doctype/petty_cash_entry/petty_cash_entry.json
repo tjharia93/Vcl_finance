@@ -77,11 +77,9 @@
    "fieldname": "txn_date",
    "fieldtype": "Date",
    "label": "Transaction Date",
-   "reqd": 1,
-   "default": "Today",
    "in_list_view": 1,
    "search_index": 1,
-   "description": "The date the cash actually moved. This is what files the entry into a week."
+   "description": "The date the cash actually moved. This is what files the entry into a week. LEFT BLANK when the source row carries no date \u2014 it used to default to Today, which stamped undated May rows with the day the sync happened to run and made a wrong date look authoritative. A blank date is visible and fixable; an invented one is neither. derive_week_ending falls back to the source sheet's week so the entry still lands in the right week."
   },
   {
    "fieldname": "week_ending",

@@ -14,3 +14,4 @@ vcl_finance.petty_cash.patches.backfill_petty_cash_entries
 # an unlocked row, which the new invariant reads as unsigned, and the next sweep
 # would silently revoke them.
 vcl_finance.petty_cash.patches.reseed_entry_approval_from_lock #2026-08-29-two-way
+vcl_finance.petty_cash.patches.unstamp_defaulted_txn_dates

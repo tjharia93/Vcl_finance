@@ -52,9 +52,8 @@
    "fieldtype": "Data",
    "label": "Source Key",
    "length": 40,
-   "reqd": 1,
    "in_list_view": 1,
-   "description": "The specific value within that family \u2014 e.g. TG / TE / SE / OA / FD / GP / OT for a Voucher Category, or Wage / Overtime / Piecework / Commission for a Wages Entry. For families with only one variant (Parking, Bike Fuel, Forklift, Loan) repeat the Source Type here."
+   "description": "The specific thing within the route \u2014 a voucher category, a number plate. LEAVE IT BLANK, with is_default ticked, to make one row that catches every key in the family: Parking is mapped once rather than once per vehicle, and a new plate needs no new row. It was mandatory, which made resolve.py's family-default fallback unreachable \u2014 the row it looks for could not be saved."
   },
   {
    "fieldname": "column_break_key",

@@ -107,9 +107,20 @@ def pending_postings(**kwargs):
             b["lines"] += 1
             b["value"] = round(b["value"] + flt(e.get("amount")), 2)
 
+    # QuickBooks ids mean nothing on screen — "QuickBooks 233" is not readable by
+    # anyone. Resolve the names once here rather than making the client fetch the
+    # whole chart to label a handful of rows.
+    wanted = {g["qbo_account"] for g in groups.values() if g.get("qbo_account")}
+    labels = {}
+    if wanted:
+        labels = {a["name"]: a["fully_qualified_name"] for a in frappe.get_all(
+            "QBO Account", filters={"name": ("in", list(wanted))},
+            fields=["name", "fully_qualified_name"], limit_page_length=0)}
+
     out = []
     for g in groups.values():
         g["weeks"] = len(g["weeks"])
+        g["qbo_label"] = labels.get(g.get("qbo_account"))
         # The single thing to do next, so the screen does not make you work it out.
         if g["never_post"]:
             g["next"] = "nothing — deliberately kept out of the books"
@@ -146,3 +157,73 @@ def pending_postings(**kwargs):
                 b["value"] for g in out for b in g["blockers"].values()), 2),
         },
     }
+
+
+@frappe.whitelist(methods=["POST"])
+def set_route_map(company, source_type, source_key=None, erp_account=None,
+                  qbo_account=None, approved=None, never_post=None, reason=None):
+    """Map a route once, for every line of it in every week.
+
+    This is the write the postings screen makes, and it exists so the mapping is
+    never done through the raw doctype again. The Desk let `source_key` be edited
+    to something the entries do not carry, which produced a row that matched no
+    line and failed silently — see the Parking incident.
+
+    ``approved`` is passed explicitly and is never implied by setting an account.
+    Choosing where a route posts and agreeing that it may post are two decisions,
+    and collapsing them is how one person's guess becomes the standing rule.
+    """
+    from vcl_finance.petty_cash.api import PETTY_PRIV
+    if not (set(frappe.get_roles()) & PETTY_PRIV):
+        frappe.throw(frappe._("Only Accounts Managers can map a route."),
+                     frappe.PermissionError)
+
+    if not frappe.db.exists("Company", company):
+        frappe.throw(frappe._("No such company: {0}").format(company))
+
+    key = (source_key or "").strip()
+    if erp_account:
+        if not frappe.db.exists("Account", erp_account):
+            frappe.throw(frappe._("No such account: {0}").format(erp_account))
+        acct = frappe.db.get_value("Account", erp_account,
+                                   ["company", "disabled", "is_group"], as_dict=True)
+        if acct.company != company:
+            frappe.throw(frappe._("{0} belongs to {1}, not {2}.")
+                         .format(erp_account, acct.company, company))
+        if acct.disabled:
+            frappe.throw(frappe._("{0} is disabled.").format(erp_account))
+        if acct.is_group:
+            frappe.throw(frappe._("{0} is a group account — nothing can post to it.")
+                         .format(erp_account))
+    if qbo_account:
+        if not R.posts_to_qbo(company):
+            frappe.throw(frappe._("{0} is not kept in QuickBooks.").format(company))
+        if not frappe.db.exists("QBO Account", qbo_account):
+            frappe.throw(frappe._("No such QuickBooks account: {0}").format(qbo_account))
+
+    name = frappe.db.get_value("Posting Map", {
+        "company": company, "source_type": source_type, "source_key": key}, "name")
+    doc = frappe.get_doc("Posting Map", name) if name else frappe.new_doc("Posting Map")
+    if not name:
+        doc.company, doc.source_type, doc.source_key = company, source_type, key
+        # A blank key is the family default — one row for every number plate.
+        doc.is_default = 1 if not key else 0
+
+    if erp_account is not None:
+        doc.erp_account = erp_account or None
+    if qbo_account is not None:
+        doc.qbo_account = qbo_account or None
+    if never_post is not None:
+        doc.never_post = 1 if int(never_post or 0) else 0
+    if approved is not None:
+        doc.approved = 1 if int(approved or 0) else 0
+    if reason:
+        doc.notes = ((doc.notes or "") + f"\n{frappe.utils.nowdate()} {frappe.session.user}: "
+                     f"{reason}").strip()
+    doc.flags.ignore_permissions = True
+    doc.save()
+    frappe.db.commit()
+
+    return {"map_row": doc.name, "approved": bool(doc.approved),
+            "erp_account": doc.erp_account, "qbo_account": doc.qbo_account,
+            "source_key": doc.source_key}

@@ -104,7 +104,19 @@ class PostingMap(Document):
 			)
 
 	def validate_approval_is_actionable(self):
-		"""Approving a row with nothing to post is a silent dead end."""
+		"""Approving a row with nothing to post is a silent dead end.
+
+		Unless the row says never_post, where having no account is the whole
+		point: the route is deliberately kept out of the books, and approving
+		that decision is exactly what makes the lines stop showing as blocked.
+		Without this exemption a never_post row could never be approved, so the
+		one mechanism for saying "this correctly posts nowhere" did not work.
+		"""
+		if self.never_post:
+			if not (self.never_post_reason or "").strip():
+				frappe.throw(_("Say why this route is kept out of the books — an "
+				               "unexplained exclusion cannot be reviewed."))
+			return
 		if self.approved and not self.erp_account:
 			frappe.throw(
 				_("Cannot approve a map row with no ERP Account — there would be nothing to post.")

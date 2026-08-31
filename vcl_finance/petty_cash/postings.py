@@ -323,3 +323,57 @@ def route_entries(company, source_type, source_key=None, limit=400):
         })
     return {"entries": out, "total": total, "shown": len(out),
             "value": round(sum(r["amount"] or 0 for r in rows), 2)}
+
+
+@frappe.whitelist()
+def unposted_lines(limit=500, **kwargs):
+    """Every signed line that has not reached a journal, as LINES.
+
+    Deliberately not grouped. The route view was the wrong shape for how this is
+    actually worked: it asked somebody to reason about a category when what they
+    have in front of them is a voucher, and it made a two-step job out of a
+    one-step one. A person coding petty cash is looking at a payment, so the
+    screen shows payments.
+
+    Oldest first — the backlog is worked forwards, and the weeks nobody has
+    touched are the ones that matter.
+    """
+    rows = frappe.get_all(
+        "Petty Cash Entry",
+        filters={"cancelled": 0, "status": "Approved", "journal_entry": ("is", "not set")},
+        fields=["name", "txn_date", "week_ending", "float", "company", "source_type",
+                "source_key", "category", "recipient", "notes", "memo", "amount",
+                "cash_in", "posting_account", "qbo_account", "receipt", "pc_received",
+                "etr_received"],
+        order_by="week_ending asc, txn_date asc, creation asc",
+        limit_page_length=int(limit or 500),
+    )
+
+    total = frappe.db.count("Petty Cash Entry", {
+        "cancelled": 0, "status": "Approved", "journal_entry": ("is", "not set")})
+
+    out = []
+    for e in rows:
+        company = e.get("company") or R.COMPANY
+        # What the map would propose, shown as a suggestion the person can take or
+        # ignore. It is NOT applied — every line is coded deliberately.
+        r = R.resolve(e)
+        out.append({
+            "name": e["name"],
+            "txn_date": str(e["txn_date"]) if e["txn_date"] else None,
+            "week_ending": str(e["week_ending"]) if e["week_ending"] else None,
+            "float": e["float"], "company": company,
+            "route": f"{e.get('source_type') or '?'} · {e.get('source_key') or '—'}",
+            "subject": (e.get("memo") or e.get("recipient") or e.get("notes")
+                        or e.get("source_key") or "—"),
+            "amount": e["amount"], "cash_in": e["cash_in"],
+            "erp_account": e.get("posting_account"),
+            "qbo_account": e.get("qbo_account"),
+            "suggested_erp": r.get("erp_account") if not e.get("posting_account") else None,
+            "posts_to_qbo": R.posts_to_qbo(company),
+            "evidence": bool(e.get("receipt") or e.get("pc_received") or e.get("etr_received")),
+            "ready": bool(e.get("posting_account") or r.get("outcome") == R.POSTS),
+        })
+
+    return {"lines": out, "shown": len(out), "total": total,
+            "value": round(sum(x["amount"] or 0 for x in out), 2)}

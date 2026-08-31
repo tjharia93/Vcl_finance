@@ -31,6 +31,8 @@ knows how to talk to Intuit and already holds the token lock; a second path to t
 same books is how the two disagree.
 """
 
+import json
+
 import frappe
 from frappe import _
 from frappe.utils import flt, now_datetime
@@ -221,11 +223,24 @@ def _open_journal(tag_base, company, posting_date):
 
 
 @frappe.whitelist()
-def post_week(week_ending, float_name=None, **kwargs):
+def post_week(week_ending, float_name=None, only=None, **kwargs):
     """Post everything that is ready. Creates DRAFT journals only."""
     _guard()
     float_name = float_name or kwargs.get("float")
     _rows, b = _survey(week_ending, float_name)
+
+    # Posting one named line rather than the whole week. The line still lands in
+    # the week's draft journal — a journal per payment would be sixty journals a
+    # week — so this narrows WHAT is added, not what the journal is.
+    if only:
+        if isinstance(only, str):
+            only = json.loads(only) if only.strip().startswith("[") else [only]
+        wanted = set(only)
+        b[READY] = [e for e in b[READY] if e["name"] in wanted]
+        missing = wanted - {e["name"] for e in b[READY]}
+        if missing:
+            frappe.throw(_("Not ready to post: {0}. It needs a signature and an account.")
+                         .format(", ".join(sorted(missing))))
 
     if not b[READY]:
         frappe.throw(_("Nothing is ready to post in this week. "
@@ -349,3 +364,24 @@ def unpost_week(week_ending, float_name=None, **kwargs):
     result = preview_week(week_ending, float_name)
     result["removed"] = journals
     return result
+
+
+@frappe.whitelist(methods=["POST"])
+def post_entry(entry):
+    """Post ONE line into its week's draft journal.
+
+    The unit of work is the line, but the unit of OUTPUT is still the week: a
+    journal per payment would be sixty journals a week and would make the books
+    unreadable. So this adds the line to the week's draft, rebuilding it in place
+    exactly as posting the whole week does.
+    """
+    _guard()
+    e = frappe.db.get_value("Petty Cash Entry", entry,
+                            ["week_ending", "float", "journal_entry"], as_dict=True)
+    if not e:
+        frappe.throw(_("No such entry: {0}").format(entry))
+    if e.journal_entry:
+        frappe.throw(_("Already posted, in {0}.").format(e.journal_entry))
+    if not e.week_ending:
+        frappe.throw(_("This line has no week — it needs a date, or its sheet does."))
+    return post_week(e.week_ending, e.float, only=[entry])

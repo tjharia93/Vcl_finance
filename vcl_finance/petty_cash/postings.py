@@ -271,3 +271,55 @@ def set_route_map(company, source_type, source_key=None, erp_account=None,
     return {"map_row": doc.name, "approved": bool(doc.approved),
             "erp_account": doc.erp_account, "qbo_account": doc.qbo_account,
             "source_key": doc.source_key}
+
+
+@frappe.whitelist()
+def route_entries(company, source_type, source_key=None, limit=400):
+    """The individual lines behind one route.
+
+    The screen is deliberately organised by route, because that is how the work is
+    done. But "192 lines, KES 1,154,881" is a number you have to trust, and nobody
+    should have to approve a mapping for money they cannot look at. So a route
+    opens to show what is actually inside it.
+
+    Read-only, and ordered newest first — the recent weeks are the ones somebody
+    still remembers.
+    """
+    key = (source_key or "").strip()
+    filters = {"company": company, "source_type": source_type, "cancelled": 0}
+
+    rows = frappe.get_all(
+        "Petty Cash Entry", filters=filters,
+        fields=["name", "txn_date", "week_ending", "float", "recipient", "notes",
+                "memo", "amount", "cash_in", "status", "source_key",
+                "posting_account", "journal_entry", "receipt", "pc_received",
+                "etr_received"],
+        order_by="txn_date desc, creation desc", limit_page_length=0,
+    )
+
+    # A family default (blank key) covers every key in the family, so it must show
+    # every plate — filtering on the blank key itself would return nothing at all.
+    if key:
+        rows = [r for r in rows if (r.get("source_key") or "").strip() == key]
+
+    total = len(rows)
+    out = []
+    for r in rows[: int(limit or 400)]:
+        out.append({
+            "name": r["name"],
+            "txn_date": str(r["txn_date"]) if r["txn_date"] else None,
+            "week_ending": str(r["week_ending"]) if r["week_ending"] else None,
+            "float": r["float"],
+            "source_key": r.get("source_key") or "",
+            "subject": (r.get("memo") or r.get("recipient") or r.get("notes")
+                        or r.get("source_key") or "—"),
+            "amount": r["amount"],
+            "cash_in": r["cash_in"],
+            "status": r["status"],
+            "posted": bool(r.get("journal_entry")),
+            "journal_entry": r.get("journal_entry"),
+            "coded": bool(r.get("posting_account")),
+            "evidence": bool(r.get("receipt") or r.get("pc_received") or r.get("etr_received")),
+        })
+    return {"entries": out, "total": total, "shown": len(out),
+            "value": round(sum(r["amount"] or 0 for r in rows), 2)}

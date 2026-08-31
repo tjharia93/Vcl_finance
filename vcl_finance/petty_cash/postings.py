@@ -145,8 +145,43 @@ def pending_postings(**kwargs):
     out.sort(key=lambda g: (g["next"] == "done", -sum(
         b["value"] for b in g["blockers"].values()) or -g["value"]))
 
+    # The other half of this screen: which WEEKS can be posted now. Routes say what
+    # is blocked; weeks say what is ready to go. Both are needed, because the
+    # workflow deliberately allows approving without posting — the backlog is
+    # signed first and posted afterwards, in one reviewed pass.
+    weeks = {}
+    for e in entries:
+        wk = (e.get("week_ending"), e.get("float"))
+        if not wk[0]:
+            continue
+        w = weeks.setdefault(wk, {"week_ending": str(wk[0]), "float": wk[1],
+                                  "ready": 0, "ready_value": 0.0, "posted": 0,
+                                  "posted_value": 0.0, "held": 0, "unsigned": 0})
+        company = e.get("company") or R.COMPANY
+        st, sk = e.get("source_type") or "?", (e.get("source_key") or "").strip()
+        row = maps.get((company, st, sk)) or maps.get((company, st, ""))
+        if e.get("journal_entry"):
+            w["posted"] += 1
+            w["posted_value"] = round(w["posted_value"] + flt(e.get("amount")), 2)
+            continue
+        if row and row.get("never_post"):
+            continue
+        if e.get("status") != "Approved":
+            w["unsigned"] += 1
+            continue
+        resolved = e.get("posting_account") or (
+            row.get("erp_account") if row and row.get("approved") else None)
+        if resolved and cash_account(company, e.get("float")):
+            w["ready"] += 1
+            w["ready_value"] = round(w["ready_value"] + flt(e.get("amount")), 2)
+        else:
+            w["held"] += 1
+
+    week_list = sorted(weeks.values(), key=lambda w: w["week_ending"], reverse=True)
+
     return {
         "routes": out,
+        "weeks": [w for w in week_list if w["ready"] or w["posted"] or w["held"]],
         "totals": {
             "routes": len(out),
             "lines": sum(g["lines"] for g in out),
@@ -155,6 +190,8 @@ def pending_postings(**kwargs):
             "unsigned": sum(g["unsigned"] for g in out),
             "blocked_value": round(sum(
                 b["value"] for g in out for b in g["blockers"].values()), 2),
+            "ready": sum(w["ready"] for w in week_list),
+            "ready_value": round(sum(w["ready_value"] for w in week_list), 2),
         },
     }
 

@@ -129,11 +129,16 @@ def preview_qbo_journal(week_ending, float_name=None, **kwargs):
     companies = sorted({e.get("company") or R.COMPANY for e in rows})
     off_book = [c for c in companies if not R.posts_to_qbo(c)]
 
-    lines, blocked, out_total, in_total = [], {}, 0.0, 0.0
+    lines, blocked, out_total = [], {}, 0.0
     for e in rows:
         company = e.get("company") or R.COMPANY
         if not R.posts_to_qbo(company):
             continue                    # a real line with no home in QBO, not an error
+        if e.get("cash_in"):
+            # Money into the tin is not an expense and is posted at the bank by
+            # somebody else. If one reaches here its route is missing never_post,
+            # which is a mapping problem, not something to silently push.
+            continue
         acct, why = _qbo_account(e.get("posting_account"), e.get("source_type"),
                                  e.get("source_key"), company, e.get("qbo_account"))
         amt = flt(e["amount"], 2)
@@ -143,36 +148,32 @@ def preview_qbo_journal(week_ending, float_name=None, **kwargs):
             b["value"] = round(b["value"] + amt, 2)
             continue
         lines.append({
-            "DetailType": "JournalEntryLineDetail",
+            "DetailType": "AccountBasedExpenseLineDetail",
             "Amount": amt,
             "Description": _describe(e)[:4000],
-            "JournalEntryLineDetail": {
-                "PostingType": "Credit" if e.get("cash_in") else "Debit",
-                "AccountRef": {"value": acct},
-            },
+            "AccountBasedExpenseLineDetail": {"AccountRef": {"value": acct}},
         })
-        if e.get("cash_in"):
-            in_total += amt
-        else:
-            out_total += amt
+        out_total += amt
 
-    # The float's own side, one line per direction — the tin moves once.
-    if out_total:
-        lines.append({
-            "DetailType": "JournalEntryLineDetail", "Amount": round(out_total, 2),
-            "Description": f"Petty cash paid out — {float_name or 'all floats'}",
-            "JournalEntryLineDetail": {"PostingType": "Credit",
-                                       "AccountRef": {"value": QBO_PETTY_CASH}},
-        })
-    if in_total:
-        lines.append({
-            "DetailType": "JournalEntryLineDetail", "Amount": round(in_total, 2),
-            "Description": f"Petty cash received — {float_name or 'all floats'}",
-            "JournalEntryLineDetail": {"PostingType": "Debit",
-                                       "AccountRef": {"value": QBO_PETTY_CASH}},
-        })
+    # No balancing lines. On an Expense the funding account is the header's
+    # AccountRef, so the object balances by construction.
+    #
+    # Cash IN never appears here at all: money into the tin is posted physically
+    # by whoever moves it at the bank, and pushing it from here would double-count
+    # 2.6m. Those routes carry never_post, and resolve() excludes them before this
+    # function ever sees them.
 
     payload = {
+        # An Expense, not a journal. Petty cash spend IS an expense paid in cash,
+        # and QuickBooks treats it as one: it appears in the Expenses list and it
+        # reconciles against Petty Cash, which is a bank-type account. A journal
+        # against a bank account sits outside both.
+        #
+        # AccountRef at the header is the funding account, so no balancing line is
+        # needed — the object balances by construction rather than by our
+        # arithmetic, which is one fewer thing to get wrong.
+        "PaymentType": "Cash",
+        "AccountRef": {"value": QBO_PETTY_CASH},
         "TxnDate": str(week_ending),
         "DocNumber": doc_number(float_name, week_ending),
         "PrivateNote": (f"Petty cash {float_name or 'all floats'}, week ending "
@@ -184,8 +185,8 @@ def preview_qbo_journal(week_ending, float_name=None, **kwargs):
     return {
         "week_ending": week_ending, "float": float_name,
         "erp_posted_lines": len(rows),
-        "qbo_lines": max(len(lines) - bool(out_total) - bool(in_total), 0),
-        "out": round(out_total, 2), "in": round(in_total, 2),
+        "qbo_lines": len(lines),
+        "out": round(out_total, 2), "in": 0.0,
         "blocked": sorted(blocked.values(), key=lambda b: -b["value"]),
         "off_book_companies": off_book,
         "erp_journals": sorted({e["journal_entry"] for e in rows}),

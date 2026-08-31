@@ -14,9 +14,18 @@ from frappe import _
 from frappe.model.document import Document
 
 
-# Source families that have exactly one variant, so `source_key` just repeats
-# the type rather than carrying a meaningful sub-key.
-SINGLETON_SOURCES = {"Parking", "Bike Fuel", "Forklift", "Loan"}
+# Source families that really do have exactly one variant, so `source_key` just
+# repeats the type. This set must match what the MIRROR writes onto entries —
+# nothing else — because a key that disagrees with the entries matches no line and
+# fails silently.
+#
+# Parking and Loan were in here and should not have been. Parking carries a number
+# plate per vehicle (KBT 972, KCB 430, KAY 635, KAP 466, KBQ 788) and Loan carries
+# nothing at all, so normalising them to "Parking" and "Loan" produced rows that
+# could never match an entry. Neither family has been mappable since this was
+# written, and the only symptom was lines staying unmapped after somebody mapped
+# them. Map Parking with a BLANK key and is_default to catch every plate at once.
+SINGLETON_SOURCES = {"Bike Fuel", "Forklift"}
 
 # Account root types that cannot post without a party on the Journal Entry line.
 PARTY_REQUIRED_ACCOUNT_TYPES = {"Receivable", "Payable"}
@@ -37,10 +46,15 @@ class PostingMap(Document):
 		self.validate_approval_is_actionable()
 
 	def normalise_source_key(self):
-		"""Singleton families repeat the type; voucher categories are upper-case."""
+		"""Singleton families repeat the type; voucher categories are upper-case.
+
+		A blank key is left blank on purpose: with `is_default` it is the family
+		default that catches every key in the family, which is how Parking is
+		mapped once rather than once per plate.
+		"""
+		self.source_key = (self.source_key or "").strip()
 		if not self.source_key:
 			return
-		self.source_key = self.source_key.strip()
 		if self.source_type in SINGLETON_SOURCES:
 			self.source_key = self.source_type
 		elif self.source_type == "Voucher Category":

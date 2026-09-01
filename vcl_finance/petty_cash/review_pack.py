@@ -29,9 +29,13 @@ def maybe_send(doc, method=None):
     """Called from on_update. Fires only on the transition INTO Submitted."""
     if doc.status != "Submitted" or doc.review_emailed_on:
         return
-    # before_save has already run, so the value in the DB is the PREVIOUS status.
-    was = frappe.db.get_value("Petty Cash Sheet", doc.name, "status")
-    if was == "Submitted":
+
+    # The previous value comes from get_doc_before_save(), NOT from the database.
+    # on_update runs AFTER the write, so db.get_value returns the NEW status —
+    # which made the guard below always true and the mail never send. The sheet
+    # for w/e 22 Aug was submitted with this deployed and nothing went out.
+    prev = doc.get_doc_before_save()
+    if prev is not None and prev.status == "Submitted":
         return                      # already submitted; this save is something else
 
     frappe.enqueue(

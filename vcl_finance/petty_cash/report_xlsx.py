@@ -29,7 +29,24 @@ CATEGORIES = [
 ]
 CAT_CODES = [c for c, _ in CATEGORIES]
 MISC_KINDS = ["Bike Fuel", "Forklift"]
-OUT_COLS = CAT_CODES + ["Parking"] + MISC_KINDS + ["Wages & Comm.", "Loans"]
+
+# Parking one column per vehicle, and wages one per kind, because that is how the
+# paper sheet is written and how it gets checked. A single "Parking" column tells
+# you the week cost 4,300 and nothing about which car; a single "Wages & Comm."
+# hides a commission inside a wage bill.
+VEHICLES = ["KAP 466", "KAY 635", "KCB 430", "KBQ 788", "KBT 972"]
+PARK_COLS = [f"P {v}" for v in VEHICLES]
+# A plate nobody listed still has to land somewhere. Dropping it would make the
+# row totals disagree with the sheet, which is the one thing a report may not do.
+PARK_OTHER = "P other"
+# entry_type on the row -> the column it belongs in. "Wage" reads as Casual on the
+# paper sheet and in the accounts (5120.1.4 Casual Wages), so it is labelled that.
+WAGE_COLS = {"Wage": "Casual", "Overtime": "Overtime",
+             "Piecework": "Piecework", "Commission": "Commission"}
+WAGE_ORDER = ["Casual", "Overtime", "Piecework", "Commission"]
+
+OUT_COLS = (CAT_CODES + PARK_COLS + [PARK_OTHER] + MISC_KINDS
+            + WAGE_ORDER + ["Loans"])
 
 # ---- VCL brand -------------------------------------------------------------
 NAVY, BLUE = "1D2766", "2B3990"
@@ -114,7 +131,9 @@ def daily_totals(sheet, days):
     for p in sheet.get("parking_entries") or []:
         day = as_date(p.get("txn_date"))
         if not p.get("cancelled") and day in rows:
-            rows[day]["Parking"] += p.get("amount") or 0
+            veh = (p.get("vehicle") or "").strip()
+            key = f"P {veh}" if f"P {veh}" in PARK_COLS else PARK_OTHER
+            rows[day][key] += p.get("amount") or 0
     for m in sheet.get("misc_entries") or []:
         day = as_date(m.get("txn_date"))
         if not m.get("cancelled") and day in rows and m.get("kind") in MISC_KINDS:
@@ -122,7 +141,9 @@ def daily_totals(sheet, days):
     for w in sheet.get("wages_entries") or []:
         day = as_date(w.get("txn_date"))
         if not w.get("cancelled") and day in rows:
-            rows[day]["Wages & Comm."] += w.get("amount") or 0
+            # An unrecognised entry_type falls to Casual rather than vanishing —
+            # the same reason PARK_OTHER exists.
+            rows[day][WAGE_COLS.get(w.get("entry_type"), "Casual")] += w.get("amount") or 0
     for l in sheet.get("loan_entries") or []:
         day = as_date(l.get("txn_date"))
         if not l.get("cancelled") and day in rows:

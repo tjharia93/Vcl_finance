@@ -29,7 +29,13 @@ after_install = "vcl_finance.petty_cash.install.after_install"
 # the mirror swallows its own exceptions so it can never block a custodian's save.
 doc_events = {
     "Petty Cash Sheet": {
-        "on_update": "vcl_finance.petty_cash.mirror.on_sheet_update",
+        "on_update": [
+            "vcl_finance.petty_cash.mirror.on_sheet_update",
+            # Submitting is the custodian saying the week is finished — the last
+            # look before sign-off. It enqueues, so a slow mail server cannot
+            # hold up a save, and it fires once per sheet.
+            "vcl_finance.petty_cash.review_pack.maybe_send",
+        ],
     },
 }
 

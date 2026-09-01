@@ -52,7 +52,9 @@
   "backfill",
   "section_notes",
   "notes",
-  "control_totals"
+  "control_totals",
+  "review_emailed_on",
+  "review_emailed_to"
  ],
  "fields": [
   {
@@ -354,6 +356,19 @@
    "fieldtype": "Small Text",
    "label": "Control Totals (from the manual sheet)",
    "description": "What the paper sheet says each category came to, as JSON keyed by category code / vehicle plate. Deliberately a plain field and NOT a child table: the mirror iterates a fixed TABLE_MAP, so a value stored here cannot reach capture, approval or posting. A key that is absent means NOT DECLARED, which is a different thing from a declared nil."
+  },
+  {
+   "fieldname": "review_emailed_on",
+   "fieldtype": "Datetime",
+   "label": "Review Pack Emailed On",
+   "read_only": 1,
+   "description": "When the submit-for-review email went out. Its presence is what stops a second one: a sheet saved again after submission must not re-send, and a duplicate review pack is worse than none because nobody knows which is current."
+  },
+  {
+   "fieldname": "review_emailed_to",
+   "fieldtype": "Small Text",
+   "label": "Review Pack Sent To",
+   "read_only": 1
   }
  ],
  "links": [],

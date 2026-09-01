@@ -31,19 +31,6 @@ CATEGORY_LABEL = {
     "OT": "Other",
 }
 
-# How the CUSTODIAN'S sheet bundles the voucher codes, which is not how the data
-# stores them. She writes one figure covering OA, FD, GP and OT, so asking for
-# four is asking her to invent a split she never made — and a split invented to
-# fill a box is worse than no control total at all.
-#
-# The codes still post separately; this only governs what is DECLARED against.
-# Change the bundling here and nowhere else.
-CATEGORY_GROUPS = [
-    ("TG", "TG  Transport — goods", ["TG"]),
-    ("TE", "TE  Transport — employee", ["TE"]),
-    ("SE", "SE  Service / repairs", ["SE"]),
-    ("OTHER", "OA · FD · GP · OT  everything else", ["OA", "FD", "GP", "OT"]),
-]
 
 
 def _declared(doc):
@@ -76,15 +63,8 @@ def control_check(sheet):
         })
 
     cats = s["cat_out"] or {}
-    for key, label, codes in CATEGORY_GROUPS:
-        add(key, label, sum(cats.get(c, 0) for c in codes), "Voucher categories")
-
-    # Any code that is not in a group would otherwise vanish from the check
-    # entirely — a category nobody declared against is exactly what this is for.
-    grouped = {c for _k, _l, codes in CATEGORY_GROUPS for c in codes}
     for c in CATEGORY_CODES:
-        if c not in grouped and cats.get(c):
-            add(c, f"{c}  {CATEGORY_LABEL.get(c, '')}".strip(), cats[c], "Voucher categories")
+        add(c, f"{c}  {CATEGORY_LABEL.get(c, '')}".strip(), cats.get(c, 0), "Voucher categories")
 
     # Driven by the vehicles actually ON this sheet, not a hardcoded fleet — a
     # plate that changes should not need a code change.
@@ -93,7 +73,22 @@ def control_check(sheet):
 
     add("bike", "Bike fuel", s.get("bike_total", 0), "Fuel")
     add("forklift", "Forklift", s.get("forklift_total", 0), "Fuel")
-    add("wages", "Wages", s.get("wages_total", 0), "Wages and loans")
+    # Wages by entry_type. summary() returns one wages_total, but the custodian's
+    # sheet carries them as separate columns and a single figure cannot be checked
+    # against four columns. Computed from the rows rather than adding another
+    # field to summary(), which the editor's live totals also depend on.
+    by_type = {}
+    for w in doc.wages_entries:
+        if w.cancelled:
+            continue
+        by_type[w.entry_type or "Wage"] = by_type.get(w.entry_type or "Wage", 0) + flt(w.amount)
+    for t in ("Wage", "Overtime", "Piecework", "Commission"):
+        add(f"wages:{t}", "Wages" if t == "Wage" else t, by_type.get(t, 0), "Wages and loans")
+    # Any entry_type the list above does not know about, so a new one cannot go
+    # unchecked just because nobody updated this file.
+    for t, amt in sorted(by_type.items()):
+        if t not in ("Wage", "Overtime", "Piecework", "Commission"):
+            add(f"wages:{t}", t, amt, "Wages and loans")
     add("loans", "Loans issued", s.get("loans_total", 0), "Wages and loans")
 
     declared_rows = [r for r in rows if r["declared"] is not None]

@@ -51,7 +51,8 @@
   "journal_entry",
   "backfill",
   "section_notes",
-  "notes"
+  "notes",
+  "control_totals"
  ],
  "fields": [
   {
@@ -347,6 +348,12 @@
    "fieldname": "notes",
    "fieldtype": "Text Editor",
    "label": "Notes"
+  },
+  {
+   "fieldname": "control_totals",
+   "fieldtype": "Small Text",
+   "label": "Control Totals (from the manual sheet)",
+   "description": "What the paper sheet says each category came to, as JSON keyed by category code / vehicle plate. Deliberately a plain field and NOT a child table: the mirror iterates a fixed TABLE_MAP, so a value stored here cannot reach capture, approval or posting. A key that is absent means NOT DECLARED, which is a different thing from a declared nil."
   }
  ],
  "links": [],

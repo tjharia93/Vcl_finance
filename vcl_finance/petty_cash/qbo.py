@@ -365,8 +365,13 @@ def suggest_qbo_account(erp_account=None, source_type=None, source_key=None, com
     Lets the approval screen show both legs at once instead of making somebody
     discover at push time that half the week has nowhere to go in QBO. Read-only.
     """
-    company = company or COMPANY
-    if not posts_to_qbo(company):
+    # Both of these live in resolve and are reachable ONLY through R — this
+    # function used them bare, so every call raised NameError. It failed silently
+    # because the caller treats a suggestion as optional, so the only symptom was
+    # the QuickBooks account never pre-filling. Ten of these in the error log
+    # before anyone noticed.
+    company = company or R.COMPANY
+    if not R.posts_to_qbo(company):
         return {"qbo": False, "account": None, "label": None,
                 "reason": f"{company} is not kept in QuickBooks — ERPNext only."}
     acct, why = _qbo_account(erp_account, source_type, source_key, company)

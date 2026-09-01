@@ -31,6 +31,20 @@ CATEGORY_LABEL = {
     "OT": "Other",
 }
 
+# How the CUSTODIAN'S sheet bundles the voucher codes, which is not how the data
+# stores them. She writes one figure covering OA, FD, GP and OT, so asking for
+# four is asking her to invent a split she never made — and a split invented to
+# fill a box is worse than no control total at all.
+#
+# The codes still post separately; this only governs what is DECLARED against.
+# Change the bundling here and nowhere else.
+CATEGORY_GROUPS = [
+    ("TG", "TG  Transport — goods", ["TG"]),
+    ("TE", "TE  Transport — employee", ["TE"]),
+    ("SE", "SE  Service / repairs", ["SE"]),
+    ("OTHER", "OA · FD · GP · OT  everything else", ["OA", "FD", "GP", "OT"]),
+]
+
 
 def _declared(doc):
     try:
@@ -61,9 +75,16 @@ def control_check(sheet):
             "variance": None if d is None else round(flt(d) - flt(captured), 2),
         })
 
+    cats = s["cat_out"] or {}
+    for key, label, codes in CATEGORY_GROUPS:
+        add(key, label, sum(cats.get(c, 0) for c in codes), "Voucher categories")
+
+    # Any code that is not in a group would otherwise vanish from the check
+    # entirely — a category nobody declared against is exactly what this is for.
+    grouped = {c for _k, _l, codes in CATEGORY_GROUPS for c in codes}
     for c in CATEGORY_CODES:
-        add(c, f"{c}  {CATEGORY_LABEL.get(c, '')}".strip(),
-            (s["cat_out"] or {}).get(c, 0), "Voucher categories")
+        if c not in grouped and cats.get(c):
+            add(c, f"{c}  {CATEGORY_LABEL.get(c, '')}".strip(), cats[c], "Voucher categories")
 
     # Driven by the vehicles actually ON this sheet, not a hardcoded fleet — a
     # plate that changes should not need a code change.

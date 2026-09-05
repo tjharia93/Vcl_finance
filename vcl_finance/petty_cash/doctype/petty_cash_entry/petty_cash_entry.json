@@ -531,6 +531,21 @@
    "role": "Petty Cash User",
    "read": 1,
    "permlevel": 1
+  },
+  {
+   "role": "Petty Cash Approver",
+   "read": 1,
+   "permlevel": 0,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "print": 1
+  },
+  {
+   "role": "Petty Cash Approver",
+   "read": 1,
+   "permlevel": 1,
+   "write": 1
   }
  ],
  "sort_field": "txn_date",

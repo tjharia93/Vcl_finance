@@ -35,14 +35,14 @@ from frappe import _
 from frappe.utils import flt, now_datetime
 
 from vcl_finance.petty_cash import resolve as R
-from vcl_finance.petty_cash.api import PETTY_PRIV
+from vcl_finance.petty_cash.api import PETTY_APPROVERS
 
 ASK_REASONS = ("No slip attached", "Need the ETR", "Photo unreadable")
 
 
 def _assert_finance():
     """The single signature. Checked here because permlevel cannot reach this path."""
-    if not (set(frappe.get_roles()) & PETTY_PRIV):
+    if not (set(frappe.get_roles()) & PETTY_APPROVERS):
         frappe.throw(
             _("Only Finance can approve or withdraw a petty cash entry."),
             frappe.PermissionError,
@@ -79,8 +79,14 @@ def _write_lock_back(doc, locked):
     Saving would re-run every sheet validation and fire ``on_update``, which runs
     the mirror again mid-approval; and a sheet that fails an unrelated validation
     would then block an approval that has nothing to do with it. The permission
-    question was already answered by ``_assert_finance()`` above — this is the same
-    person the sheet's own guard would have allowed to tick the box by hand.
+    question was already answered by ``_assert_finance()`` above.
+
+    Note that since ``PETTY_APPROVERS`` this is NOT always somebody the sheet's own
+    guard would let tick the box by hand: a ``Petty Cash Approver`` is not in
+    ``LOCK_OVERRIDE_ROLES``, deliberately. She may sign a line, and signing locks
+    the row — but she cannot then hand-edit that locked row on the sheet. The way
+    back is ``withdraw_entry``, which unticks it through here, with a reason
+    recorded. That is the intended asymmetry, not an oversight.
 
     Native entries have no row to write to and are skipped.
     """

@@ -219,6 +219,20 @@ def get_feed(sheet):
 
 PETTY_PRIV = {"Accounts Manager", "System Manager"}
 
+# Who may SIGN one entry — wider than PETTY_PRIV, and wider by exactly one
+# purpose-built role.
+#
+# Shiro keys petty cash and Tanuj asked for her to approve it too. Doing that by
+# granting Accounts Manager would have handed the petty cash custodian the bank,
+# the journals and every invoice, because that is what the role carries
+# everywhere else in ERPNext. This role carries one thing.
+#
+# It deliberately does NOT reach _is_accounts_manager below, so closing a week,
+# approving a week, reopening one and posting all stay where they were. The
+# recorder can sign a line; she cannot lock the week she keyed, and she cannot
+# push it into a journal.
+PETTY_APPROVERS = PETTY_PRIV | {"Petty Cash Approver"}
+
 
 def _is_accounts_manager():
     return bool(set(frappe.get_roles()) & PETTY_PRIV)

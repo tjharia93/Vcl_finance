@@ -397,10 +397,19 @@ def pending_entries(limit=200, float_name=None, **kwargs):
             "receipt_ask_reason": e.get("receipt_ask_reason"),
             "withdrawn": bool(e.get("withdrawn_on")),
             "withdrawal_reason": e.get("withdrawal_reason"),
-            # What it would post to, shown BEFORE signing rather than after. The
-            # same resolver the posting run uses, so the two cannot disagree.
-            "would_post_to": e.get("posting_account") or r.get("erp_account"),
-            "route_reason": None if r.get("outcome") == R.POSTS else r.get("reason"),
+            # What it would post to, shown BEFORE signing rather than after,
+            # through the same resolver the posting run uses.
+            #
+            # An account is named ONLY when the line would actually post. The
+            # resolver still returns an erp_account on a route whose map row is
+            # unapproved, so taking it unconditionally told the approver "codes
+            # to 5240.6" about a line that posting will hold — the confident
+            # wrong answer, which is worse here than no answer.
+            "would_post_to": (e.get("posting_account")
+                              or (r.get("erp_account") if r.get("outcome") == R.POSTS
+                                  else None)),
+            "route_reason": None if (e.get("posting_account")
+                                     or r.get("outcome") == R.POSTS) else r.get("reason"),
             # The sheet owns txn_date and cancelled while a line is mirrored, so
             # the phone must show re-dating and voiding as somewhere else to go
             # rather than as buttons that silently revert on the next sheet save.

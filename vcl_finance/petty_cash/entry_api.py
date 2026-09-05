@@ -32,8 +32,9 @@ capture path and are ``Native``, both work normally.
 
 import frappe
 from frappe import _
-from frappe.utils import now_datetime
+from frappe.utils import flt, now_datetime
 
+from vcl_finance.petty_cash import resolve as R
 from vcl_finance.petty_cash.api import PETTY_PRIV
 
 ASK_REASONS = ("No slip attached", "Need the ETR", "Photo unreadable")
@@ -326,3 +327,85 @@ def _teach_map(doc, account, qbo_account=None):
     row.flags.ignore_permissions = True
     row.save(ignore_permissions=True)
     return row.name
+
+
+# ----------------------------------------------------------------------
+# The queue, as lines. Read-only.
+# ----------------------------------------------------------------------
+
+@frappe.whitelist()
+def pending_entries(limit=200, float_name=None, **kwargs):
+    """Every line still waiting for a signature, oldest first.
+
+    A whitelisted read rather than a ``get_list`` because the phone app never
+    touches the DocType REST surface — the approval fields sit at permlevel 1 and
+    a list call returns them stripped, so the client would have to infer status
+    from an absence. This says what it means, and it says it once.
+
+    Oldest first for the same reason the posting queue is: the weeks nobody has
+    looked at are the ones that matter, and a newest-first queue hides them
+    behind whatever was keyed this morning.
+    """
+    float_name = float_name or kwargs.get("float")
+    _assert_finance()
+
+    filters = {"cancelled": 0, "status": ("!=", "Approved")}
+    if float_name:
+        filters["float"] = float_name
+
+    rows = frappe.get_all(
+        "Petty Cash Entry", filters=filters,
+        fields=["name", "txn_date", "week_ending", "float", "company", "source_type",
+                "source_key", "category", "recipient", "notes", "memo", "amount",
+                "cash_in", "status", "posting_account", "receipt", "pc_received",
+                "etr_received", "receipt_asked_on", "receipt_ask_reason",
+                "withdrawn_on", "withdrawal_reason", "sync_state"],
+        order_by="week_ending asc, txn_date asc, creation asc",
+        limit_page_length=int(limit or 200),
+    )
+
+    total = frappe.db.count("Petty Cash Entry",
+                            {"cancelled": 0, "status": ("!=", "Approved")})
+
+    out = []
+    for e in rows:
+        company = e.get("company") or R.COMPANY
+        r = R.resolve(e)
+        out.append({
+            "name": e["name"],
+            "txn_date": str(e["txn_date"]) if e["txn_date"] else None,
+            "week_ending": str(e["week_ending"]) if e["week_ending"] else None,
+            "float": e["float"], "company": company,
+            "route": f"{e.get('source_type') or '?'} · {e.get('source_key') or '—'}",
+            "source_type": e.get("source_type"),
+            "source_key": e.get("source_key"),
+            "category": e.get("category"),
+            # Parking never has a payee — the money is attached to a VEHICLE and
+            # the plate in source_key is the only thing identifying the line. All
+            # 271 of them carry a null recipient, so without this every parking
+            # row reads "No payee", which tells the approver nothing.
+            "subject": (e.get("recipient")
+                        or (e.get("source_key") if e.get("source_type") == "Parking" else None)
+                        or e.get("memo") or e.get("notes") or "—"),
+            "is_plate": not (e.get("recipient") or "").strip()
+                        and e.get("source_type") == "Parking"
+                        and bool((e.get("source_key") or "").strip()),
+            "amount": e["amount"], "cash_in": e["cash_in"],
+            "status": e.get("status"),
+            "evidence": bool(e.get("receipt") or e.get("pc_received") or e.get("etr_received")),
+            "receipt_asked": bool(e.get("receipt_asked_on")),
+            "receipt_ask_reason": e.get("receipt_ask_reason"),
+            "withdrawn": bool(e.get("withdrawn_on")),
+            "withdrawal_reason": e.get("withdrawal_reason"),
+            # What it would post to, shown BEFORE signing rather than after. The
+            # same resolver the posting run uses, so the two cannot disagree.
+            "would_post_to": e.get("posting_account") or r.get("erp_account"),
+            "route_reason": None if r.get("outcome") == R.POSTS else r.get("reason"),
+            # The sheet owns txn_date and cancelled while a line is mirrored, so
+            # the phone must show re-dating and voiding as somewhere else to go
+            # rather than as buttons that silently revert on the next sheet save.
+            "mirrored": (e.get("sync_state") or "") == "Mirrored",
+        })
+
+    return {"lines": out, "shown": len(out), "total": total,
+            "value": round(sum(flt(x["amount"]) for x in out), 2)}

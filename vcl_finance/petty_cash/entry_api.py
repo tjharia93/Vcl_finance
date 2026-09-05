@@ -384,9 +384,14 @@ def pending_entries(limit=200, float_name=None, **kwargs):
             # the plate in source_key is the only thing identifying the line. All
             # 271 of them carry a null recipient, so without this every parking
             # row reads "No payee", which tells the approver nothing.
+            # Never a bare dash. PCE-2026-00020 is a live Bike Fuel row with no
+            # payee, memo or note, and "—" asks somebody to sign for a payment
+            # the screen cannot describe. The route is the last thing we know
+            # about it, so the route is what it says.
             "subject": (e.get("recipient")
                         or (e.get("source_key") if e.get("source_type") == "Parking" else None)
-                        or e.get("memo") or e.get("notes") or "—"),
+                        or e.get("memo") or e.get("notes")
+                        or e.get("source_type") or "—"),
             "is_plate": not (e.get("recipient") or "").strip()
                         and e.get("source_type") == "Parking"
                         and bool((e.get("source_key") or "").strip()),

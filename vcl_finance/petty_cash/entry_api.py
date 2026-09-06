@@ -351,11 +351,27 @@ def pending_entries(limit=200, float_name=None, **kwargs):
     Oldest first for the same reason the posting queue is: the weeks nobody has
     looked at are the ones that matter, and a newest-first queue hides them
     behind whatever was keyed this morning.
+
+    ORPHANED ROWS ARE EXCLUDED. The full-sheet autosave fault duplicated and
+    deleted child rows — 444 entries for 90 real payments on 2 Sep — and the
+    mirror marks the wreckage ``Orphaned`` rather than destroying it. 50 of them
+    were sitting in this queue: rows for payments that never happened, offered
+    for signature. Nothing that reads petty cash entries may skip this filter.
+
+    ``value`` is the value of the WHOLE queue, not of the page. It used to sum
+    the rows returned, so the header paired a count of 936 with the money of the
+    200 that fit — KES 1.35m against a real 6.47m. A total and a page total are
+    different numbers and only one of them belongs next to ``total``.
     """
     float_name = float_name or kwargs.get("float")
     _assert_finance()
 
-    filters = {"cancelled": 0, "status": ("!=", "Approved")}
+    filters = {
+        "cancelled": 0,
+        "status": ("!=", "Approved"),
+        # See [[reference_petty_cash_full_sheet_autosave]] — never unfiltered.
+        "sync_state": ("!=", "Orphaned"),
+    }
     if float_name:
         filters["float"] = float_name
 
@@ -370,8 +386,11 @@ def pending_entries(limit=200, float_name=None, **kwargs):
         limit_page_length=int(limit or 200),
     )
 
-    total = frappe.db.count("Petty Cash Entry",
-                            {"cancelled": 0, "status": ("!=", "Approved")})
+    # Counted and valued over the SAME filters the page was drawn from, or the
+    # header pairs one query's count with another's money.
+    total = frappe.db.count("Petty Cash Entry", filters)
+    total_value = flt(frappe.db.get_value(
+        "Petty Cash Entry", filters, "sum(amount)") or 0)
 
     out = []
     for e in rows:
@@ -427,5 +446,15 @@ def pending_entries(limit=200, float_name=None, **kwargs):
             "mirrored": (e.get("sync_state") or "") == "Mirrored",
         })
 
-    return {"lines": out, "shown": len(out), "total": total,
-            "value": round(sum(flt(x["amount"]) for x in out), 2)}
+    return {
+        "lines": out,
+        "shown": len(out),
+        "total": total,
+        # The whole queue's money, not the page's — see the docstring.
+        "value": round(total_value, 2),
+        # What this page is worth, when a caller genuinely wants the page.
+        "shown_value": round(sum(flt(x["amount"]) for x in out), 2),
+        # Says plainly that there is more behind the limit. The phone had no way
+        # to know 736 of 936 lines were simply absent.
+        "truncated": total > len(out),
+    }

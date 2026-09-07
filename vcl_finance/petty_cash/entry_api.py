@@ -32,7 +32,7 @@ capture path and are ``Native``, both work normally.
 
 import frappe
 from frappe import _
-from frappe.utils import flt, now_datetime
+from frappe.utils import cint, flt, now_datetime
 
 from vcl_finance.petty_cash import resolve as R
 from vcl_finance.petty_cash.api import PETTY_APPROVERS
@@ -340,8 +340,8 @@ def _teach_map(doc, account, qbo_account=None):
 # ----------------------------------------------------------------------
 
 @frappe.whitelist()
-def pending_entries(limit=200, float_name=None, **kwargs):
-    """Every line still waiting for a signature, oldest first.
+def pending_entries(limit=200, float_name=None, newest_first=0, **kwargs):
+    """Every line still waiting for a signature, oldest first by default.
 
     A whitelisted read rather than a ``get_list`` because the phone app never
     touches the DocType REST surface — the approval fields sit at permlevel 1 and
@@ -351,6 +351,14 @@ def pending_entries(limit=200, float_name=None, **kwargs):
     Oldest first for the same reason the posting queue is: the weeks nobody has
     looked at are the ones that matter, and a newest-first queue hides them
     behind whatever was keyed this morning.
+
+    ``newest_first`` inverts that, and the phone asks for it: the custodian now
+    RECORDS on the same device she signs on, so her first question is "did the
+    one I just keyed arrive", which oldest-first answers 200 rows later. It is
+    a parameter rather than a new default precisely because the argument above
+    still holds for the desk — and because the caller that flips it has to show
+    ``total`` alongside, or the backlog it pushes down becomes invisible rather
+    than merely lower.
 
     ORPHANED ROWS ARE EXCLUDED. The full-sheet autosave fault duplicated and
     deleted child rows — 444 entries for 90 real payments on 2 Sep — and the
@@ -382,7 +390,11 @@ def pending_entries(limit=200, float_name=None, **kwargs):
                 "cash_in", "status", "posting_account", "receipt", "pc_received",
                 "etr_received", "receipt_asked_on", "receipt_ask_reason",
                 "withdrawn_on", "withdrawal_reason", "sync_state"],
-        order_by="week_ending asc, txn_date asc, creation asc",
+        order_by=(
+            "week_ending desc, txn_date desc, creation desc"
+            if cint(newest_first)
+            else "week_ending asc, txn_date asc, creation asc"
+        ),
         limit_page_length=int(limit or 200),
     )
 

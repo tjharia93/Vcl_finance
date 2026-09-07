@@ -401,8 +401,20 @@ def pending_entries(limit=200, float_name=None, newest_first=0, **kwargs):
     # Counted and valued over the SAME filters the page was drawn from, or the
     # header pairs one query's count with another's money.
     total = frappe.db.count("Petty Cash Entry", filters)
-    total_value = flt(frappe.db.get_value(
-        "Petty Cash Entry", filters, "sum(amount)") or 0)
+    # Summed in Python, not in SELECT.
+    #
+    # This was `get_value(..., "sum(amount)")` and a Frappe upgrade started
+    # refusing SQL functions passed as field strings — every refresh of the
+    # approval queue returned 417 and the phone quietly served its cache
+    # instead, so the screen looked fine while being stale. A plain field read
+    # cannot be broken by the query builder tightening again, and the row
+    # count here is in the hundreds, not the millions.
+    total_value = flt(sum(
+        flt(r.amount) for r in frappe.get_all(
+            "Petty Cash Entry", filters=filters, fields=["amount"],
+            limit_page_length=0,
+        )
+    ))
 
     out = []
     for e in rows:

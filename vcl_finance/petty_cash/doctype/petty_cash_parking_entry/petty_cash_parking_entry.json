@@ -10,12 +10,16 @@
   "vehicle",
   "slot",
   "amount",
+  "receipt",
   "cancelled",
   "cancelled_on",
   "cancel_remark",
   "locked",
   "locked_by",
-  "locked_on"
+  "locked_on",
+  "reconciled",
+  "reconciled_by",
+  "reconciled_on"
  ],
  "fields": [
   {
@@ -64,6 +68,11 @@
    "options": "currency"
   },
   {
+    "fieldname": "receipt",
+    "fieldtype": "Attach Image",
+    "label": "Receipt photo"
+  },
+  {
    "default": "0",
    "description": "Voided entry — kept on the sheet for audit but excluded from all totals and posting.",
    "fieldname": "cancelled",
@@ -99,6 +108,25 @@
    "fieldtype": "Datetime",
    "label": "Locked On",
    "read_only": 1
+  },
+  {
+    "default": "0",
+    "description": "Finance has checked this row against the custodian's paper sheet. Comes AFTER the approval tick, and only an Accounts Manager can set or clear it.",
+    "fieldname": "reconciled",
+    "fieldtype": "Check",
+    "label": "Reconciled by Finance"
+  },
+  {
+    "fieldname": "reconciled_by",
+    "fieldtype": "Data",
+    "label": "Reconciled By",
+    "read_only": 1
+  },
+  {
+    "fieldname": "reconciled_on",
+    "fieldtype": "Datetime",
+    "label": "Reconciled On",
+    "read_only": 1
   }
  ],
  "istable": 1,

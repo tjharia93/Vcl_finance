@@ -149,7 +149,7 @@ def _feed_items(doc):
             "date": _date_str(w.txn_date), "label": WAGE_TYPE_LABEL.get(t, "Wage"),
             "recipient": w.recipient or "", "staff_id": w.staff_id or "", "reason": w.reason or "",
             "subtitle": w.reason or w.staff_id or "", "amount": flt(w.amount), "direction": "out",
-            "color": TYPE_COLOR.get(kind), "ticks": {"paye": bool(w.paye)}, "receipt": None,
+            "color": TYPE_COLOR.get(kind), "ticks": {"paye": bool(w.paye)}, "receipt": w.receipt or None,
             "cancelled": bool(w.cancelled), "cancel_remark": w.cancel_remark or "",
             "locked": bool(w.locked), "locked_by": w.locked_by or "",
             "locked_on": str(w.locked_on) if w.locked_on else "",
@@ -164,7 +164,7 @@ def _feed_items(doc):
             "staff_id": l.staff_id or "", "reason": l.reason or "",
             "subtitle": l.reason or l.staff_id or "", "amount": flt(l.amount_issued),
             "direction": "out", "color": TYPE_COLOR["loan"], "ticks": {"paye": bool(l.paye)},
-            "receipt": None,
+            "receipt": l.receipt or None,
             "cancelled": bool(l.cancelled), "cancel_remark": l.cancel_remark or "",
             "locked": bool(l.locked), "locked_by": l.locked_by or "",
             "locked_on": str(l.locked_on) if l.locked_on else "",
@@ -178,7 +178,7 @@ def _feed_items(doc):
             "id": m.name, "kind": kind, "section": "misc", "row_idx": m.row_idx,
             "date": _date_str(m.txn_date), "label": m.kind, "recipient": "",
             "notes": m.notes or "", "subtitle": m.notes or "", "amount": flt(m.amount),
-            "direction": "out", "color": TYPE_COLOR.get(kind), "ticks": {}, "receipt": None,
+            "direction": "out", "color": TYPE_COLOR.get(kind), "ticks": {}, "receipt": m.receipt or None,
             "cancelled": bool(m.cancelled), "cancel_remark": m.cancel_remark or "",
             "locked": bool(m.locked), "locked_by": m.locked_by or "",
             "locked_on": str(m.locked_on) if m.locked_on else "",
@@ -193,7 +193,7 @@ def _feed_items(doc):
             "date": _date_str(p.txn_date),
             "label": "Parking", "recipient": p.vehicle,
             "subtitle": p.vehicle or p.day_idx or "", "amount": flt(p.amount),
-            "direction": "out", "color": TYPE_COLOR["parking"], "ticks": {}, "receipt": None,
+            "direction": "out", "color": TYPE_COLOR["parking"], "ticks": {}, "receipt": p.receipt or None,
             "cancelled": bool(p.cancelled), "cancel_remark": p.cancel_remark or "",
             "locked": bool(p.locked), "locked_by": p.locked_by or "",
             "locked_on": str(p.locked_on) if p.locked_on else "",
@@ -628,21 +628,39 @@ def reinstate_entry(sheet, entry_id):
 # ----------------------------------------------------------------------
 
 @frappe.whitelist()
-def attach_receipt(sheet, voucher_name, file_url):
-    """Set a voucher row's ``receipt`` Attach Image to an uploaded File's url."""
+def attach_receipt(sheet, voucher_name=None, file_url=None, row_name=None):
+    """Set a child row's ``receipt`` Attach Image to an uploaded File's url.
+
+    Every child table carries ``receipt`` now, not just vouchers — a wage sheet, a
+    loan chit and a parking ticket are all things somebody hands over paper for.
+    So the row is looked up across all five tables via ``_find_row`` rather than
+    ``doc.vouchers``.
+
+    ``voucher_name`` is kept as the parameter name because the phone UI has been
+    sending it since May; ``row_name`` is the honest alias for new callers. Either
+    one names a child row.
+
+    A LOCKED row can still take a receipt — but only from an Accounts Manager, via
+    ``_assert_row_unlocked``'s bypass. That is deliberate: Finance reconciling a
+    closed week is exactly when a missing slip turns up.
+    """
+    row_name = row_name or voucher_name
+    if not row_name:
+        frappe.throw(_("No row given to attach the receipt to."))
     if not frappe.has_permission("Petty Cash Sheet", "write", sheet):
         frappe.throw(_("Not permitted."), frappe.PermissionError)
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
     _assert_can_write(doc)
     if doc.docstatus != 0:
         frappe.throw(_("Sheet is submitted — cannot change receipts."))
-    row = next((v for v in doc.vouchers if v.name == voucher_name), None)
+    table, row = _find_row(doc, row_name)
     if row is None:
-        frappe.throw(_("Voucher row not found on this sheet."))
+        frappe.throw(_("That row no longer exists on this sheet."))
     _assert_row_unlocked(row)
     row.receipt = file_url
     doc.save()
-    return {"ok": True, "voucher_name": voucher_name, "receipt": file_url}
+    return {"ok": True, "table": table, "row_name": row_name,
+            "voucher_name": row_name, "receipt": file_url}
 
 
 @frappe.whitelist(methods=["POST"])

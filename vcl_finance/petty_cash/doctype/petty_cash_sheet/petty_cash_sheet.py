@@ -20,6 +20,17 @@ FORKLIFT_ROWS = 4
 # Whoever may unlock a row (and edit / delete a locked one). Mirrors api.PETTY_PRIV.
 LOCK_OVERRIDE_ROLES = {"Accounts Manager", "System Manager"}
 
+# Whoever may tick "Reconciled by Finance". Deliberately NOT `Petty Cash Approver`:
+# that role exists so the custodian can sign her own lines, which means recording
+# and approving already sit in one pair of hands. The reconcile tick is the only
+# second pair left on the sheet, so it stays with Finance proper.
+RECONCILE_ROLES = {"Accounts Manager", "System Manager"}
+
+# The reconcile stamp, and every child table it lives on — i.e. all of them.
+RECONCILE_FIELDS = ("reconciled_by", "reconciled_on")
+RECONCILE_TABLES = ("vouchers", "wages_entries", "loan_entries",
+                    "parking_entries", "misc_entries")
+
 # The user-meaningful fields the row lock protects, per child table, with the type
 # used to normalise each side before comparing.
 #
@@ -30,6 +41,12 @@ LOCK_OVERRIDE_ROLES = {"Accounts Manager", "System Manager"}
 # a locked row. Metadata (name/owner/creation/modified/parent*/docstatus/doctype)
 # is excluded for the same reason. `cancelled_on` / `cancel_remark` ride along with
 # `cancelled`, which IS compared.
+#
+# ALSO DELIBERATELY EXCLUDED: `reconciled` and its stamps. Finance reconciles a
+# week AFTER it has been approved, so by then every real row is locked — listing
+# `reconciled` here would make the row lock forbid the very tick that is meant to
+# follow it. guard_reconcile_rows() polices that field on its own terms instead,
+# for locked and unlocked rows alike.
 LOCK_COMPARE_FIELDS = {
     "vouchers": (
         ("txn_date", "date"), ("voucher_no", "text"), ("recipient", "text"),
@@ -41,20 +58,22 @@ LOCK_COMPARE_FIELDS = {
         ("txn_date", "date"), ("entry_type", "text"), ("recipient", "text"),
         ("staff_id", "text"), ("reason", "text"), ("amount", "money"),
         ("paye", "check"), ("recipient_signed", "check"),
-        ("authorised_signed", "check"), ("cancelled", "check"), ("locked", "check"),
+        ("authorised_signed", "check"), ("receipt", "text"),
+        ("cancelled", "check"), ("locked", "check"),
     ),
     "loan_entries": (
         ("txn_date", "date"), ("recipient", "text"), ("staff_id", "text"),
         ("reason", "text"), ("amount_issued", "money"), ("amount_signed", "money"),
-        ("paye", "check"), ("cancelled", "check"), ("locked", "check"),
+        ("paye", "check"), ("receipt", "text"),
+        ("cancelled", "check"), ("locked", "check"),
     ),
     "parking_entries": (
         ("txn_date", "date"), ("vehicle", "text"), ("amount", "money"),
-        ("cancelled", "check"), ("locked", "check"),
+        ("receipt", "text"), ("cancelled", "check"), ("locked", "check"),
     ),
     "misc_entries": (
         ("kind", "text"), ("txn_date", "date"), ("amount", "money"),
-        ("recipient_signed", "check"), ("notes", "text"),
+        ("recipient_signed", "check"), ("notes", "text"), ("receipt", "text"),
         ("cancelled", "check"), ("locked", "check"),
     ),
 }
@@ -119,6 +138,9 @@ class PettyCashSheet(Document):
         # themselves, so the incoming payload has to be compared against the DB
         # state while it is still exactly what the client sent.
         self.guard_locked_rows()
+        # Same window again, and for the same reason: the reconcile tick is read
+        # off the incoming payload before ensure_grid() can touch a row.
+        self.guard_reconcile_rows()
         # Same reason, same window: compare the INCOMING dates against the DB state
         # before ensure_grid / derive_parking_days / the autosorts touch any row.
         self.validate_row_weeks()
@@ -292,6 +314,67 @@ class PettyCashSheet(Document):
                     # for anyone else before we get here.
                     new.locked_by = None
                     new.locked_on = None
+
+    def guard_reconcile_rows(self):
+        """ORM-layer guard on the Finance reconcile tick — the third state a row has.
+
+        The sequence on a week is: the custodian KEYS a row, an approver TICKS the
+        lock (that is the per-line sign-off), and then, once the week is closed,
+        Finance walks the sheet against the custodian's paper book and ticks
+        ``reconciled`` on each line that agrees. Three acts, three ticks, and the
+        third is the only one that is not already in the custodian's own hands —
+        ``Petty Cash Approver`` exists precisely so she can sign what she keyed.
+        So this tick is restricted harder than the lock: RECONCILE_ROLES only, in
+        BOTH directions, whether or not the row is locked.
+
+        Why it cannot ride on ``guard_locked_rows``: that guard demands a locked
+        row be byte-for-byte unchanged, and by reconcile time every real row IS
+        locked. Putting ``reconciled`` in LOCK_COMPARE_FIELDS would therefore make
+        the approval forbid the reconciliation. It is excluded there and policed
+        here.
+
+        No check that the row was approved first. A void row is never locked and
+        Finance still has to eye it against the paper sheet, so requiring the lock
+        would block exactly the rows most worth looking at.
+
+        Stamps ``reconciled_by`` / ``reconciled_on`` on 0 -> 1 and clears them on
+        1 -> 0; a row that stays reconciled keeps its ORIGINAL stamp, restored
+        server-side rather than trusted from whatever the client echoed back (the
+        fields are ``read_only`` in the UI only).
+        """
+        before = self.get_doc_before_save()
+        if before is None:
+            return  # insert: a brand-new sheet has nothing reconciled yet
+
+        may = bool(set(frappe.get_roles()) & RECONCILE_ROLES)
+
+        for table in RECONCILE_TABLES:
+            old_rows = {r.name: r for r in (before.get(table) or []) if r.name}
+
+            for new in (self.get(table) or []):
+                old = old_rows.get(new.name) if new.name else None
+                was = cint(old.get("reconciled")) if old is not None else 0
+                now = cint(new.get("reconciled"))
+
+                if now == was:
+                    # Unchanged — pin the stored stamp back on, so a client that
+                    # echoes a stale or invented value cannot rewrite who signed.
+                    if old is not None:
+                        for f in RECONCILE_FIELDS:
+                            new.set(f, old.get(f))
+                    continue
+
+                if not may:
+                    frappe.throw(
+                        _("Only Finance can mark a petty cash line reconciled."),
+                        frappe.PermissionError,
+                    )
+                if now:
+                    new.reconciled_by = frappe.session.user
+                    new.reconciled_on = frappe.utils.now()
+                else:
+                    new.reconciled_by = None
+                    new.reconciled_on = None
 
     def validate_row_weeks(self):
         """A dated child row must fall inside this sheet's Sun–Sat span.

@@ -1,0 +1,1024 @@
+[
+[
+"94",
+"Bank of Baroda - KES",
+"Asset",
+"Bank",
+-66802114.98
+],
+[
+"30",
+"Cash and Cash Equivalents",
+"Asset",
+"Bank",
+0.0
+],
+[
+"1150040001",
+"Cash and Cash Equivalents:ABC Bank",
+"Asset",
+"Bank",
+246317.16
+],
+[
+"1150040002",
+"Cash and Cash Equivalents:Bank of Baroda - USD",
+"Asset",
+"Bank",
+1101045.57
+],
+[
+"1150040000",
+"Cash and Cash Equivalents:Co-Operative Bank",
+"Asset",
+"Bank",
+2817282.61
+],
+[
+"95",
+"Cash and Cash Equivalents:Petty Cash",
+"Asset",
+"Bank",
+1593424.51
+],
+[
+"1150040009",
+"Cash and Cash Equivalents:Term Deposit - Bank of Baroda",
+"Asset",
+"Bank",
+0.0
+],
+[
+"214",
+"INCORRECT RATES",
+"Asset",
+"Bank",
+0.0
+],
+[
+"1150040003",
+"VAT With-Held",
+"Asset",
+"Bank",
+-0.66
+],
+[
+"93",
+"Accounts Receivable (A/R)",
+"Asset",
+"Accounts Receivable",
+151706398.52
+],
+[
+"1150040071",
+"Deposits",
+"Asset",
+"Other Current Asset",
+3747849.46
+],
+[
+"1150040004",
+"Deposits:Container Deposit",
+"Asset",
+"Other Current Asset",
+5193695.6
+],
+[
+"1150040114",
+"Deposits:KENYA POWER AND LIGHTING DEPOSIT",
+"Asset",
+"Other Current Asset",
+592000.0
+],
+[
+"1150040039",
+"Deposits:Machinery Deposit",
+"Asset",
+"Other Current Asset",
+12688710.29
+],
+[
+"1150040092",
+"Income Tax Pre-Payments",
+"Asset",
+"Other Current Asset",
+6400000.0
+],
+[
+"1150040093",
+"Income Tax Pre-Payments:Advance Tax (Vehicle)",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040005",
+"Insurance Claims",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040069",
+"Inventory:Inventory - Finished Goods",
+"Asset",
+"Other Current Asset",
+2770960.0
+],
+[
+"1150040067",
+"Inventory:Inventory - Raw Material",
+"Asset",
+"Other Current Asset",
+31681700.0
+],
+[
+"1150040068",
+"Inventory:Inventory - Work in Progress",
+"Asset",
+"Other Current Asset",
+1004439.0
+],
+[
+"83",
+"Inventory Asset",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040042",
+"Other Receivables:Loan Receivable",
+"Asset",
+"Other Current Asset",
+540000.0
+],
+[
+"1150040043",
+"Other Receivables:Stock and Debenture Investments",
+"Asset",
+"Other Current Asset",
+221142.0
+],
+[
+"48",
+"Prepaid expenses",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040006",
+"Prepaid Insurance",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040007",
+"Prepaid License",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040008",
+"Taxes Recoverable",
+"Asset",
+"Other Current Asset",
+1677987.0
+],
+[
+"1150040010",
+"Uncategorised Asset:Uncategorised Payment",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040103",
+"Uncategorised Asset:With-Holding Payments",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"84",
+"Undeposited Funds",
+"Asset",
+"Other Current Asset",
+0.0
+],
+[
+"1150040066",
+"Land",
+"Asset",
+"Fixed Asset",
+7500000.0
+],
+[
+"1150040065",
+"Property, plant and equipment:Buildings",
+"Asset",
+"Fixed Asset",
+69680320.0
+],
+[
+"1150040064",
+"Property, plant and equipment:Computer and Software",
+"Asset",
+"Fixed Asset",
+624972.21
+],
+[
+"1150040063",
+"Property, plant and equipment:Furniture and Fittings",
+"Asset",
+"Fixed Asset",
+1014895.67
+],
+[
+"1150040062",
+"Property, plant and equipment:Motor Vehicles",
+"Asset",
+"Fixed Asset",
+1202497.0
+],
+[
+"1150040061",
+"Property, plant and equipment:Plant and Machinery",
+"Asset",
+"Fixed Asset",
+48010772.7
+],
+[
+"35",
+"Long-Term Investments",
+"Asset",
+"Other Asset",
+335601312.16
+],
+[
+"99",
+"Accounts Payable (A/P)",
+"Liability",
+"Accounts Payable",
+-239954676.37
+],
+[
+"1150040053",
+"Accrued Liabilites:Accrued Audit Fees",
+"Liability",
+"Other Current Liability",
+-400000.0
+],
+[
+"1150040076",
+"Accrued Liabilites:Accrued Housing Levy",
+"Liability",
+"Other Current Liability",
+-128056.7
+],
+[
+"1150040054",
+"Accrued Liabilites:Accrued KEBS Payables",
+"Liability",
+"Other Current Liability",
+-95100.0
+],
+[
+"1150040077",
+"Accrued Liabilites:Accrued NITA Levy Payable",
+"Liability",
+"Other Current Liability",
+-3950.0
+],
+[
+"1150040051",
+"Accrued Liabilites:Accrued Salaries:Administration Department",
+"Liability",
+"Other Current Liability",
+-3255601.0
+],
+[
+"1150040052",
+"Accrued Liabilites:Accrued Salaries:Directors Salary",
+"Liability",
+"Other Current Liability",
+-3284813.5
+],
+[
+"1150040041",
+"Accrued Liabilites:Accrued Utilities",
+"Liability",
+"Other Current Liability",
+-406374.3
+],
+[
+"1150040058",
+"Accrued Liabilites:Payroll Liabilities:Accrued Sacco Deduction Payable",
+"Liability",
+"Other Current Liability",
+-215233.0
+],
+[
+"131",
+"Accrued Liabilites:Payroll Liabilities:NSSF PAYABLE",
+"Liability",
+"Other Current Liability",
+-345316.0
+],
+[
+"130",
+"Accrued Liabilites:Payroll Liabilities:PAYE PAYABLE",
+"Liability",
+"Other Current Liability",
+-641723.6
+],
+[
+"133",
+"Accrued Liabilites:Payroll Liabilities:SHA PAYABLE",
+"Liability",
+"Other Current Liability",
+-117605.0
+],
+[
+"1150040095",
+"Accrued Security Charges",
+"Liability",
+"Other Current Liability",
+-102028.28
+],
+[
+"1150040079",
+"Customer Deposits",
+"Liability",
+"Other Current Liability",
+-566281.0
+],
+[
+"1150040078",
+"Payable to Directors and Other Related Parties:Directors Bonus Payable",
+"Liability",
+"Other Current Liability",
+-76718581.47
+],
+[
+"1150040046",
+"Payable to Directors and Other Related Parties:Jeetendra Haria",
+"Liability",
+"Other Current Liability",
+-8195556.0
+],
+[
+"1150040047",
+"Payable to Directors and Other Related Parties:Mahendra Haria",
+"Liability",
+"Other Current Liability",
+-8653564.0
+],
+[
+"1150040048",
+"Payable to Directors and Other Related Parties:Pankaj Haria",
+"Liability",
+"Other Current Liability",
+-2200000.0
+],
+[
+"1150040049",
+"Payable to Directors and Other Related Parties:Pradip Haria",
+"Liability",
+"Other Current Liability",
+-3427940.0
+],
+[
+"1150040080",
+"Taxes Payable",
+"Liability",
+"Other Current Liability",
+-1.0
+],
+[
+"85",
+"VAT Control",
+"Liability",
+"Other Current Liability",
+0.01
+],
+[
+"86",
+"VAT Suspense",
+"Liability",
+"Other Current Liability",
+16834748.61
+],
+[
+"1150040018",
+"95900600003044 - Soykimau Land Loan - VCL",
+"Liability",
+"Long Term Liability",
+-60000000.36
+],
+[
+"1150040019",
+"95900600003354 - SOYKIMAU CONSTRUCTION LOAN - VCL",
+"Liability",
+"Long Term Liability",
+-110292153.32
+],
+[
+"1150040020",
+"95900600003490 - MACHINERY LOAN - VCL",
+"Liability",
+"Long Term Liability",
+-19250055.0
+],
+[
+"1150040044",
+"Deffered Tax Liability",
+"Liability",
+"Long Term Liability",
+-1834938.0
+],
+[
+"1150040059",
+"General Reserve",
+"Equity",
+"Equity",
+-124382498.0
+],
+[
+"87",
+"Opening Balance Equity",
+"Equity",
+"Equity",
+0.0
+],
+[
+"76",
+"Retained Earnings",
+"Equity",
+"Equity",
+0.0
+],
+[
+"1150040060",
+"Revaluation Surplus",
+"Equity",
+"Equity",
+-4553247.0
+],
+[
+"9",
+"Share capital",
+"Equity",
+"Equity",
+-3000000.0
+],
+[
+"77",
+"Sales",
+"Revenue",
+"Income",
+-495524910.91
+],
+[
+"100",
+"Consumables",
+"Expense",
+"Cost of Goods Sold",
+4552369.91
+],
+[
+"1150040023",
+"Container demurrage",
+"Expense",
+"Cost of Goods Sold",
+2716371.46
+],
+[
+"1150040036",
+"Customs Duty",
+"Expense",
+"Cost of Goods Sold",
+2729714.24
+],
+[
+"105",
+"Design and Artworks",
+"Expense",
+"Cost of Goods Sold",
+645128.64
+],
+[
+"1150040089",
+"Design and Artworks:Film Seperation",
+"Expense",
+"Cost of Goods Sold",
+130600.0
+],
+[
+"1150040090",
+"Design and Artworks:Flexo Label Plates",
+"Expense",
+"Cost of Goods Sold",
+464010.81
+],
+[
+"106",
+"Design and Artworks:SM102 plates",
+"Expense",
+"Cost of Goods Sold",
+204001.0
+],
+[
+"1150040106",
+"DIE CHARGES",
+"Expense",
+"Cost of Goods Sold",
+28472.41
+],
+[
+"1150040111",
+"Inbound Freight & Import Costs:Clearing Agent & Forwarding Fees",
+"Expense",
+"Cost of Goods Sold",
+1808039.63
+],
+[
+"1150040112",
+"Inbound Freight & Import Costs:CONTAINER SCANNER",
+"Expense",
+"Cost of Goods Sold",
+3000.0
+],
+[
+"1150040123",
+"Inbound Freight & Import Costs:CUSTOM WAREHOUSE RENT",
+"Expense",
+"Cost of Goods Sold",
+71094.0
+],
+[
+"1150040104",
+"Inbound Freight & Import Costs:EPZ SURCHAGE",
+"Expense",
+"Cost of Goods Sold",
+200000.0
+],
+[
+"70",
+"Inbound Freight & Import Costs:Freight and delivery - COS",
+"Expense",
+"Cost of Goods Sold",
+19538696.98
+],
+[
+"112",
+"Inbound Freight & Import Costs:IDF FEES",
+"Expense",
+"Cost of Goods Sold",
+8714871.0
+],
+[
+"1150040101",
+"Inbound Freight & Import Costs:MSS LEVY",
+"Expense",
+"Cost of Goods Sold",
+423145.0
+],
+[
+"115",
+"Inbound Freight & Import Costs:Port Charges",
+"Expense",
+"Cost of Goods Sold",
+12964510.66
+],
+[
+"113",
+"Inbound Freight & Import Costs:Railway Levy",
+"Expense",
+"Cost of Goods Sold",
+6305405.0
+],
+[
+"116",
+"Inbound Freight & Import Costs:Weighbridge Charges",
+"Expense",
+"Cost of Goods Sold",
+1172000.0
+],
+[
+"111",
+"KEBS LEVY",
+"Expense",
+"Cost of Goods Sold",
+991182.0
+],
+[
+"101",
+"Machine Repair and Maintenance",
+"Expense",
+"Cost of Goods Sold",
+1443253.97
+],
+[
+"1150040017",
+"Net Production Salary",
+"Expense",
+"Cost of Goods Sold",
+2204430.0
+],
+[
+"1150040034",
+"Net Production Salary:Advance Salaries - Production",
+"Expense",
+"Cost of Goods Sold",
+7200498.0
+],
+[
+"1150040118",
+"Net Production Salary:End Month Salaries - Production",
+"Expense",
+"Cost of Goods Sold",
+8377340.66
+],
+[
+"110",
+"Purchase Trading",
+"Expense",
+"Cost of Goods Sold",
+943856.26
+],
+[
+"1150040107",
+"Purchase Trading:Printing Works",
+"Expense",
+"Cost of Goods Sold",
+579560.0
+],
+[
+"80",
+"Purchases",
+"Expense",
+"Cost of Goods Sold",
+331466014.05
+],
+[
+"123",
+"TRANSPORT CHARGES",
+"Expense",
+"Cost of Goods Sold",
+4815452.28
+],
+[
+"1150040011",
+"Vehicle Maintenance and Expenses",
+"Expense",
+"Cost of Goods Sold",
+1100012.44
+],
+[
+"191",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses",
+"Expense",
+"Cost of Goods Sold",
+1653314.05
+],
+[
+"1150040100",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses:Bike Fuel",
+"Expense",
+"Cost of Goods Sold",
+342276.22
+],
+[
+"1150040116",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses:Vehicle Fuel",
+"Expense",
+"Cost of Goods Sold",
+862316.07
+],
+[
+"1150040025",
+"Weekly Wages",
+"Expense",
+"Cost of Goods Sold",
+3009135.74
+],
+[
+"1150040124",
+"Weekly Wages:Weekly Wages - Leave Pay",
+"Expense",
+"Cost of Goods Sold",
+121992.5
+],
+[
+"50",
+"Bank charges",
+"Expense",
+"Expense",
+505322.19
+],
+[
+"212",
+"Bank charges:Bank charges - USD Account",
+"Expense",
+"Expense",
+450946.01
+],
+[
+"1150040125",
+"County Licenses & Permits",
+"Expense",
+"Expense",
+72408.0
+],
+[
+"1150040088",
+"Employee Injury",
+"Expense",
+"Expense",
+10940.0
+],
+[
+"1150040117",
+"Finance Charge - Insurance",
+"Expense",
+"Expense",
+524295.0
+],
+[
+"38",
+"Insurance - General",
+"Expense",
+"Expense",
+3839016.0
+],
+[
+"134",
+"Insurance - General:Insurance - Bond",
+"Expense",
+"Expense",
+398308.0
+],
+[
+"1150040105",
+"Insurance - General:Insurance - Marine",
+"Expense",
+"Expense",
+712412.0
+],
+[
+"53",
+"Interest Expense:Loan Interest",
+"Expense",
+"Expense",
+27500371.0
+],
+[
+"1150040096",
+"Interest Expense:Loan Interest:Loan Interest - Penalty",
+"Expense",
+"Expense",
+35.0
+],
+[
+"1150040021",
+"Interest Expense:Overdraft Interest",
+"Expense",
+"Expense",
+9185873.0
+],
+[
+"54",
+"Legal and Professional Fees",
+"Expense",
+"Expense",
+1644091.14
+],
+[
+"1150040087",
+"Medical Expenses",
+"Expense",
+"Expense",
+-127980.0
+],
+[
+"1150040126",
+"Motor Vehicle Taxes & Licenses",
+"Expense",
+"Expense",
+7200.0
+],
+[
+"1150040037",
+"Net Salaries - Administration and Sales",
+"Expense",
+"Expense",
+12507830.0
+],
+[
+"1150040035",
+"Net Salaries - Administration and Sales:Advance Salaries - Administrative",
+"Expense",
+"Expense",
+874875.0
+],
+[
+"1150040122",
+"Net Salaries - Administration and Sales:Directors Salary",
+"Expense",
+"Expense",
+3584813.5
+],
+[
+"1150040029",
+"Net Salaries - Administration and Sales:Leave and Gratuity",
+"Expense",
+"Expense",
+1429129.0
+],
+[
+"1150040119",
+"Net Salaries - Administration and Sales:Termination Pay",
+"Expense",
+"Expense",
+523248.0
+],
+[
+"1150040120",
+"Net Salaries - Administration and Sales:Travelling Allowance",
+"Expense",
+"Expense",
+18000.0
+],
+[
+"1150040014",
+"NITA Levy",
+"Expense",
+"Expense",
+42650.0
+],
+[
+"56",
+"Office expenses",
+"Expense",
+"Expense",
+1080717.69
+],
+[
+"1150040085",
+"Office expenses:OFFICE STATIONERY",
+"Expense",
+"Expense",
+2903.0
+],
+[
+"46",
+"Other Types of Expenses-Advertising Expenses",
+"Expense",
+"Expense",
+153335.0
+],
+[
+"1150040013",
+"Payroll Expenses:Housing Levy",
+"Expense",
+"Expense",
+1526899.7
+],
+[
+"117",
+"Payroll Expenses:LOMPASAGO SACCO",
+"Expense",
+"Expense",
+2583018.0
+],
+[
+"1150040016",
+"Payroll Expenses:NSSF",
+"Expense",
+"Expense",
+4145274.0
+],
+[
+"1150040012",
+"Payroll Expenses:PAYE",
+"Expense",
+"Expense",
+7858985.2
+],
+[
+"1150040015",
+"Payroll Expenses:SHA (SHIF)",
+"Expense",
+"Expense",
+1427764.2
+],
+[
+"1150040031",
+"postage and deliveries",
+"Expense",
+"Expense",
+9450.0
+],
+[
+"1150040128",
+"Prior Year Taxes",
+"Expense",
+"Expense",
+663131.0
+],
+[
+"58",
+"Rent or lease payments",
+"Expense",
+"Expense",
+11329500.0
+],
+[
+"1150040086",
+"Sales Commission",
+"Expense",
+"Expense",
+58900.0
+],
+[
+"108",
+"Sanitary",
+"Expense",
+"Expense",
+368528.15
+],
+[
+"109",
+"SERVICES",
+"Expense",
+"Expense",
+38547.0
+],
+[
+"8",
+"Shipping and delivery expense",
+"Expense",
+"Expense",
+39445.0
+],
+[
+"1150040110",
+"Software and Subscriptions",
+"Expense",
+"Expense",
+138000.0
+],
+[
+"64",
+"Utilities",
+"Expense",
+"Expense",
+24188.0
+],
+[
+"1150040082",
+"Utilities:Mobile and Internet Expenses",
+"Expense",
+"Expense",
+130647.75
+],
+[
+"1150040115",
+"Utilities:POWER AND LIGHTING - UTILITIES",
+"Expense",
+"Expense",
+4699923.78
+],
+[
+"1150040127",
+"Utilities:WATER BILLS",
+"Expense",
+"Expense",
+258030.0
+],
+[
+"15",
+"Wage expenses",
+"Expense",
+"Expense",
+325835.0
+],
+[
+"107",
+"Security charges",
+"Expense",
+"Other Expense",
+1355829.08
+],
+[
+"1150040027",
+"Staff Office Transport",
+"Expense",
+"Other Expense",
+195150.0
+]
+]

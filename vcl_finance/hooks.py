@@ -17,8 +17,9 @@ web_include_js = "/assets/vcl_finance/js/petty_cash.js"
 
 # Installation patch list
 # -----------------------
-# Run after install: seed Petty Cash Category and the 5 vehicle plates.
-after_install = "vcl_finance.petty_cash.install.after_install"
+# Run after install: seed Petty Cash Category and the 5 vehicle plates, then the
+# Book Alignment audited lines and QBO crosswalk.
+after_install = "vcl_finance.install.after_install"
 
 # Document events
 # ---------------

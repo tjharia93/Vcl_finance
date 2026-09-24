@@ -1,0 +1,144 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-24 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "qbo_account",
+  "qbo_account_name",
+  "fs_line",
+  "column_break_1",
+  "decision",
+  "erp_account",
+  "proposed_erp_account",
+  "section_decision",
+  "notes",
+  "column_break_2",
+  "decided_by",
+  "decided_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "qbo_account",
+   "fieldtype": "Link",
+   "label": "QBO account",
+   "options": "QBO Account",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "set_only_once": 1
+  },
+  {
+   "fieldname": "qbo_account_name",
+   "fieldtype": "Data",
+   "label": "QBO account name",
+   "fetch_from": "qbo_account.fully_qualified_name",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "fs_line",
+   "fieldtype": "Link",
+   "label": "Audited line",
+   "options": "Audited FS Line",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "decision",
+   "fieldtype": "Select",
+   "label": "Decision",
+   "options": "\nMap\nCreate\nIgnore\nQuestion",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
+   "description": "Tanuj's call. Blank until he makes it."
+  },
+  {
+   "fieldname": "erp_account",
+   "fieldtype": "Link",
+   "label": "ERPNext account (decided)",
+   "options": "Account",
+   "description": "Set with the decision. Only a Map decision with this filled counts as a mapping."
+  },
+  {
+   "fieldname": "proposed_erp_account",
+   "fieldtype": "Link",
+   "label": "ERPNext account (proposed)",
+   "options": "Account",
+   "read_only": 1,
+   "description": "Rafiq's proposal from the account-map workbook, 24-Sep-2026. Not a decision."
+  },
+  {
+   "fieldname": "section_decision",
+   "fieldtype": "Section Break",
+   "label": "Decision record"
+  },
+  {
+   "fieldname": "notes",
+   "fieldtype": "Small Text",
+   "label": "Notes"
+  },
+  {
+   "fieldname": "column_break_2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "decided_by",
+   "fieldtype": "Link",
+   "label": "Decided by",
+   "options": "User",
+   "read_only": 1
+  },
+  {
+   "fieldname": "decided_at",
+   "fieldtype": "Datetime",
+   "label": "Decided at",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-24 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Book Alignment",
+ "name": "QBO ERP Account Crosswalk",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Accounts Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "modified",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "autoname": "field:qbo_account",
+ "title_field": "qbo_account_name",
+ "show_title_field_in_link": 1,
+ "search_fields": "qbo_account_name,erp_account"
+}

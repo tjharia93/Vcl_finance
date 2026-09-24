@@ -1,0 +1,93 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-24 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "as_at",
+  "qbo_account",
+  "qbo_account_name",
+  "column_break_1",
+  "balance",
+  "pulled_at"
+ ],
+ "fields": [
+  {
+   "fieldname": "as_at",
+   "fieldtype": "Date",
+   "label": "As at",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "qbo_account",
+   "fieldtype": "Link",
+   "label": "QBO account",
+   "options": "QBO Account",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "qbo_account_name",
+   "fieldtype": "Data",
+   "label": "QBO account name",
+   "fetch_from": "qbo_account.fully_qualified_name",
+   "read_only": 1
+  },
+  {
+   "fieldname": "column_break_1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "balance",
+   "fieldtype": "Currency",
+   "label": "Balance (Dr + / Cr -)",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "pulled_at",
+   "fieldtype": "Datetime",
+   "label": "Pulled at"
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-24 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Book Alignment",
+ "name": "QBO Balance Snapshot",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Accounts Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  }
+ ],
+ "sort_field": "as_at",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 1,
+ "title_field": "qbo_account_name"
+}

@@ -1,0 +1,1496 @@
+[
+[
+"10",
+"Sales - Retail",
+"Revenue",
+"Income"
+],
+[
+"100",
+"Consumables",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"101",
+"Machine Repair and Maintenance",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"102",
+"Reconciliation Discrepancies",
+"Expense",
+"Other Expense"
+],
+[
+"103",
+"Inventory Shrinkage",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"104",
+"Unapplied Cash Bill Payment Expense",
+"Expense",
+"Expense"
+],
+[
+"105",
+"Design and Artworks",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"106",
+"Design and Artworks:SM102 plates",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"107",
+"Security charges",
+"Expense",
+"Other Expense"
+],
+[
+"108",
+"Sanitary",
+"Expense",
+"Expense"
+],
+[
+"109",
+"SERVICES",
+"Expense",
+"Expense"
+],
+[
+"11",
+"Sales - Wholesale",
+"Revenue",
+"Income"
+],
+[
+"110",
+"Purchase Trading",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"111",
+"KEBS LEVY",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"112",
+"Inbound Freight & Import Costs:IDF FEES",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"113",
+"Inbound Freight & Import Costs:Railway Levy",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"115",
+"Inbound Freight & Import Costs:Port Charges",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040000",
+"Cash and Cash Equivalents:Co-Operative Bank",
+"Asset",
+"Bank"
+],
+[
+"1150040001",
+"Cash and Cash Equivalents:ABC Bank",
+"Asset",
+"Bank"
+],
+[
+"1150040002",
+"Cash and Cash Equivalents:Bank of Baroda - USD",
+"Asset",
+"Bank"
+],
+[
+"1150040003",
+"VAT With-Held",
+"Asset",
+"Bank"
+],
+[
+"1150040004",
+"Deposits:Container Deposit",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040005",
+"Insurance Claims",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040006",
+"Prepaid Insurance",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040007",
+"Prepaid License",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040008",
+"Taxes Recoverable",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040009",
+"Cash and Cash Equivalents:Term Deposit - Bank of Baroda",
+"Asset",
+"Bank"
+],
+[
+"1150040010",
+"Uncategorised Asset:Uncategorised Payment",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040011",
+"Vehicle Maintenance and Expenses",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040012",
+"Payroll Expenses:PAYE",
+"Expense",
+"Expense"
+],
+[
+"1150040013",
+"Payroll Expenses:Housing Levy",
+"Expense",
+"Expense"
+],
+[
+"1150040014",
+"NITA Levy",
+"Expense",
+"Expense"
+],
+[
+"1150040015",
+"Payroll Expenses:SHA (SHIF)",
+"Expense",
+"Expense"
+],
+[
+"1150040016",
+"Payroll Expenses:NSSF",
+"Expense",
+"Expense"
+],
+[
+"1150040017",
+"Net Production Salary",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040018",
+"95900600003044 - Soykimau Land Loan - VCL",
+"Liability",
+"Long Term Liability"
+],
+[
+"1150040019",
+"95900600003354 - SOYKIMAU CONSTRUCTION LOAN - VCL",
+"Liability",
+"Long Term Liability"
+],
+[
+"1150040020",
+"95900600003490 - MACHINERY LOAN - VCL",
+"Liability",
+"Long Term Liability"
+],
+[
+"1150040021",
+"Interest Expense:Overdraft Interest",
+"Expense",
+"Expense"
+],
+[
+"1150040022",
+"TREO Taxes",
+"Expense",
+"Other Expense"
+],
+[
+"1150040023",
+"Container demurrage",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040024",
+"Fines and Penalty",
+"Expense",
+"Other Expense"
+],
+[
+"1150040025",
+"Weekly Wages",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040027",
+"Staff Office Transport",
+"Expense",
+"Other Expense"
+],
+[
+"1150040029",
+"Net Salaries - Administration and Sales:Leave and Gratuity",
+"Expense",
+"Expense"
+],
+[
+"1150040030",
+"Sales and Marketing Income",
+"Expense",
+"Expense"
+],
+[
+"1150040031",
+"postage and deliveries",
+"Expense",
+"Expense"
+],
+[
+"1150040032",
+"Forex Gain/Loss",
+"Expense",
+"Expense"
+],
+[
+"1150040033",
+"SUSPENSE ACCOUNT",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040034",
+"Net Production Salary:Advance Salaries - Production",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040035",
+"Net Salaries - Administration and Sales:Advance Salaries - Administrative",
+"Expense",
+"Expense"
+],
+[
+"1150040036",
+"Customs Duty",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040037",
+"Net Salaries - Administration and Sales",
+"Expense",
+"Expense"
+],
+[
+"1150040038",
+"income tax instalment",
+"Expense",
+"Expense"
+],
+[
+"1150040039",
+"Deposits:Machinery Deposit",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040040",
+"Detention",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040041",
+"Accrued Liabilites:Accrued Utilities",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040042",
+"Other Receivables:Loan Receivable",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040043",
+"Other Receivables:Stock and Debenture Investments",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040044",
+"Deffered Tax Liability",
+"Liability",
+"Long Term Liability"
+],
+[
+"1150040046",
+"Payable to Directors and Other Related Parties:Jeetendra Haria",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040047",
+"Payable to Directors and Other Related Parties:Mahendra Haria",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040048",
+"Payable to Directors and Other Related Parties:Pankaj Haria",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040049",
+"Payable to Directors and Other Related Parties:Pradip Haria",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040050",
+"Accrued Liabilites:Accrued Salaries",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040051",
+"Accrued Liabilites:Accrued Salaries:Administration Department",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040052",
+"Accrued Liabilites:Accrued Salaries:Directors Salary",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040053",
+"Accrued Liabilites:Accrued Audit Fees",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040054",
+"Accrued Liabilites:Accrued KEBS Payables",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040055",
+"Accrued Liabilites:Payroll Liabilities:NHIF Payable",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040058",
+"Accrued Liabilites:Payroll Liabilities:Accrued Sacco Deduction Payable",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040059",
+"General Reserve",
+"Equity",
+"Equity"
+],
+[
+"1150040060",
+"Revaluation Surplus",
+"Equity",
+"Equity"
+],
+[
+"1150040061",
+"Property, plant and equipment:Plant and Machinery",
+"Asset",
+"Fixed Asset"
+],
+[
+"1150040062",
+"Property, plant and equipment:Motor Vehicles",
+"Asset",
+"Fixed Asset"
+],
+[
+"1150040063",
+"Property, plant and equipment:Furniture and Fittings",
+"Asset",
+"Fixed Asset"
+],
+[
+"1150040064",
+"Property, plant and equipment:Computer and Software",
+"Asset",
+"Fixed Asset"
+],
+[
+"1150040065",
+"Property, plant and equipment:Buildings",
+"Asset",
+"Fixed Asset"
+],
+[
+"1150040066",
+"Land",
+"Asset",
+"Fixed Asset"
+],
+[
+"1150040067",
+"Inventory:Inventory - Raw Material",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040068",
+"Inventory:Inventory - Work in Progress",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040069",
+"Inventory:Inventory - Finished Goods",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040071",
+"Deposits",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040072",
+"Other Receivables",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040074",
+"Payable to Directors and Other Related Parties",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040075",
+"Accrued Liabilites",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040076",
+"Accrued Liabilites:Accrued Housing Levy",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040077",
+"Accrued Liabilites:Accrued NITA Levy Payable",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040078",
+"Payable to Directors and Other Related Parties:Directors Bonus Payable",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040079",
+"Customer Deposits",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040080",
+"Taxes Payable",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040081",
+"Utilities:Internet Access",
+"Expense",
+"Expense"
+],
+[
+"1150040082",
+"Utilities:Mobile and Internet Expenses",
+"Expense",
+"Expense"
+],
+[
+"1150040083",
+"Interest Expense",
+"Expense",
+"Expense"
+],
+[
+"1150040084",
+"Inbound Freight & Import Costs",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040085",
+"Office expenses:OFFICE STATIONERY",
+"Expense",
+"Expense"
+],
+[
+"1150040086",
+"Sales Commission",
+"Expense",
+"Expense"
+],
+[
+"1150040087",
+"Medical Expenses",
+"Expense",
+"Expense"
+],
+[
+"1150040088",
+"Employee Injury",
+"Expense",
+"Expense"
+],
+[
+"1150040089",
+"Design and Artworks:Film Seperation",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040090",
+"Design and Artworks:Flexo Label Plates",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040091",
+"Direct Labour Compensation",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040092",
+"Income Tax Pre-Payments",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040093",
+"Income Tax Pre-Payments:Advance Tax (Vehicle)",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040094",
+"Income Tax Pre-Payments:Advance Tax - Income Tax",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040095",
+"Accrued Security Charges",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040096",
+"Interest Expense:Loan Interest:Loan Interest - Penalty",
+"Expense",
+"Expense"
+],
+[
+"1150040097",
+"Insurance Claim Income / Recovery",
+"Revenue",
+"Other Income"
+],
+[
+"1150040098",
+"Loss on Burglary / Theft",
+"Expense",
+"Other Expense"
+],
+[
+"1150040100",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses:Bike Fuel",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040101",
+"Inbound Freight & Import Costs:MSS LEVY",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040102",
+"Input VAT - Habo Agencies",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040103",
+"Uncategorised Asset:With-Holding Payments",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040104",
+"Inbound Freight & Import Costs:EPZ SURCHAGE",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040105",
+"Insurance - General:Insurance - Marine",
+"Expense",
+"Expense"
+],
+[
+"1150040106",
+"DIE CHARGES",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040107",
+"Purchase Trading:Printing Works",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040108",
+"VAT  Timing Differences",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040109",
+"VAT Missing Items - Control Account",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040110",
+"Software and Subscriptions",
+"Expense",
+"Expense"
+],
+[
+"1150040111",
+"Inbound Freight & Import Costs:Clearing Agent & Forwarding Fees",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040112",
+"Inbound Freight & Import Costs:CONTAINER SCANNER",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040113",
+"Compliance & Regulatory Costs",
+"Expense",
+"Expense"
+],
+[
+"1150040114",
+"Deposits:KENYA POWER AND LIGHTING DEPOSIT",
+"Asset",
+"Other Current Asset"
+],
+[
+"1150040115",
+"Utilities:POWER AND LIGHTING - UTILITIES",
+"Expense",
+"Expense"
+],
+[
+"1150040116",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses:Vehicle Fuel",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040117",
+"Finance Charge - Insurance",
+"Expense",
+"Expense"
+],
+[
+"1150040118",
+"Net Production Salary:End Month Salaries - Production",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040119",
+"Net Salaries - Administration and Sales:Termination Pay",
+"Expense",
+"Expense"
+],
+[
+"1150040120",
+"Net Salaries - Administration and Sales:Travelling Allowance",
+"Expense",
+"Expense"
+],
+[
+"1150040121",
+"Accrued Liabilites:Accrued Rent",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040122",
+"Net Salaries - Administration and Sales:Directors Salary",
+"Expense",
+"Expense"
+],
+[
+"1150040123",
+"Inbound Freight & Import Costs:CUSTOM WAREHOUSE RENT",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040124",
+"Weekly Wages:Weekly Wages - Leave Pay",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040125",
+"County Licenses & Permits",
+"Expense",
+"Expense"
+],
+[
+"1150040126",
+"Motor Vehicle Taxes & Licenses",
+"Expense",
+"Expense"
+],
+[
+"1150040127",
+"Utilities:WATER BILLS",
+"Expense",
+"Expense"
+],
+[
+"1150040128",
+"Prior Year Taxes",
+"Expense",
+"Expense"
+],
+[
+"1150040129",
+"95900600003764- Availisation 100,000",
+"Liability",
+"Other Current Liability"
+],
+[
+"1150040130",
+"Inbound Freight & Import Costs:Documentation Fee",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040131",
+"Office Maintenance & Sundries Expenses",
+"Expense",
+"Expense"
+],
+[
+"1150040132",
+"Machine Repair and Maintenance:Machine Repair and Maintenance - Consumables",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"1150040133",
+"Inbound Freight & Import Costs:Shipping Line Charges",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"116",
+"Inbound Freight & Import Costs:Weighbridge Charges",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"117",
+"Payroll Expenses:LOMPASAGO SACCO",
+"Expense",
+"Expense"
+],
+[
+"118",
+"Offsetting Adjustments",
+"Asset",
+"Bank"
+],
+[
+"12",
+"Other comprehensive income",
+"Equity",
+"Equity"
+],
+[
+"123",
+"TRANSPORT CHARGES",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"124",
+"duplex board",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"13",
+"Dividend disbursed",
+"Equity",
+"Equity"
+],
+[
+"130",
+"Accrued Liabilites:Payroll Liabilities:PAYE PAYABLE",
+"Liability",
+"Other Current Liability"
+],
+[
+"131",
+"Accrued Liabilites:Payroll Liabilities:NSSF PAYABLE",
+"Liability",
+"Other Current Liability"
+],
+[
+"133",
+"Accrued Liabilites:Payroll Liabilities:SHA PAYABLE",
+"Liability",
+"Other Current Liability"
+],
+[
+"134",
+"Insurance - General:Insurance - Bond",
+"Expense",
+"Expense"
+],
+[
+"14",
+"Available for sale assets (short-term)",
+"Asset",
+"Other Current Asset"
+],
+[
+"15",
+"Wage expenses",
+"Expense",
+"Expense"
+],
+[
+"16",
+"Loss on disposal of assets",
+"Revenue",
+"Other Income"
+],
+[
+"18",
+"Other operating income (expenses)",
+"Revenue",
+"Other Income"
+],
+[
+"19",
+"Equity in earnings of subsidiaries",
+"Equity",
+"Equity"
+],
+[
+"191",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"193",
+"Interest Expense:Loan Interest:Loan Interest",
+"Expense",
+"Expense"
+],
+[
+"194",
+"Raw Material",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"2",
+"Uncategorised Income",
+"Revenue",
+"Income"
+],
+[
+"20",
+"Property, plant and equipment",
+"Asset",
+"Fixed Asset"
+],
+[
+"21",
+"Long-term debt",
+"Liability",
+"Long Term Liability"
+],
+[
+"212",
+"Bank charges:Bank charges - USD Account",
+"Expense",
+"Expense"
+],
+[
+"213",
+"Statutory Levy & Fees",
+"Expense",
+"Expense"
+],
+[
+"214",
+"INCORRECT RATES",
+"Asset",
+"Bank"
+],
+[
+"22",
+"Liabilities related to assets held for sale",
+"Liability",
+"Long Term Liability"
+],
+[
+"23",
+"Income tax expense",
+"Expense",
+"Expense"
+],
+[
+"232",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses:Forklift Gas",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"233",
+"Net Production Salary:Casuals",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"234",
+"Net Production Salary:Overtime",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"235",
+"Vehicle Maintenance and Expenses:Vehicle Running Expenses:Parking",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"24",
+"Other selling expenses",
+"Expense",
+"Expense"
+],
+[
+"25",
+"Management compensation",
+"Expense",
+"Expense"
+],
+[
+"26",
+"Loss on discontinued operations, net of tax",
+"Expense",
+"Expense"
+],
+[
+"27",
+"Income tax payable",
+"Liability",
+"Other Current Liability"
+],
+[
+"28",
+"Amortisation expense",
+"Expense",
+"Expense"
+],
+[
+"29",
+"Commissions and fees",
+"Expense",
+"Expense"
+],
+[
+"3",
+"Uncategorised Expense",
+"Expense",
+"Expense"
+],
+[
+"30",
+"Cash and Cash Equivalents",
+"Asset",
+"Bank"
+],
+[
+"31",
+"Accrued holiday payable",
+"Liability",
+"Long Term Liability"
+],
+[
+"32",
+"Accrued non-current liabilities",
+"Liability",
+"Long Term Liability"
+],
+[
+"34",
+"Materials - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"35",
+"Long-Term Investments",
+"Asset",
+"Other Asset"
+],
+[
+"36",
+"Intangibles",
+"Asset",
+"Other Asset"
+],
+[
+"37",
+"Assets held for sale",
+"Asset",
+"Other Asset"
+],
+[
+"38",
+"Insurance - General",
+"Expense",
+"Expense"
+],
+[
+"39",
+"Dividends payable",
+"Liability",
+"Other Current Liability"
+],
+[
+"4",
+"Uncategorised Asset",
+"Asset",
+"Other Current Asset"
+],
+[
+"40",
+"Discounts given - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"41",
+"Change in inventory - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"42",
+"Overhead - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"43",
+"Other - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"44",
+"Subcontractors - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"45",
+"Direct labour - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"46",
+"Other Types of Expenses-Advertising Expenses",
+"Expense",
+"Expense"
+],
+[
+"47",
+"Accumulated depreciation on property, plant and equipment",
+"Asset",
+"Fixed Asset"
+],
+[
+"48",
+"Prepaid expenses",
+"Asset",
+"Other Current Asset"
+],
+[
+"49",
+"Bad debts",
+"Expense",
+"Expense"
+],
+[
+"5",
+"Unrealised loss on securities, net of tax",
+"Revenue",
+"Other Income"
+],
+[
+"50",
+"Bank charges",
+"Expense",
+"Expense"
+],
+[
+"51",
+"Dues and subscriptions",
+"Expense",
+"Expense"
+],
+[
+"52",
+"Equipment rental",
+"Expense",
+"Expense"
+],
+[
+"53",
+"Interest Expense:Loan Interest",
+"Expense",
+"Expense"
+],
+[
+"54",
+"Legal and Professional Fees",
+"Expense",
+"Expense"
+],
+[
+"55",
+"Meals and entertainment",
+"Expense",
+"Expense"
+],
+[
+"56",
+"Office expenses",
+"Expense",
+"Expense"
+],
+[
+"57",
+"Other General and Administrative Expenses",
+"Expense",
+"Expense"
+],
+[
+"58",
+"Rent or lease payments",
+"Expense",
+"Expense"
+],
+[
+"59",
+"Repairs and Maintenance",
+"Expense",
+"Expense"
+],
+[
+"6",
+"Travel expenses - selling expenses",
+"Expense",
+"Expense"
+],
+[
+"60",
+"Stationery and printing",
+"Expense",
+"Expense"
+],
+[
+"61",
+"Dividend income",
+"Revenue",
+"Other Income"
+],
+[
+"62",
+"Interest income",
+"Revenue",
+"Other Income"
+],
+[
+"63",
+"Deferred tax assets",
+"Asset",
+"Other Asset"
+],
+[
+"64",
+"Utilities",
+"Expense",
+"Expense"
+],
+[
+"65",
+"Supplies",
+"Expense",
+"Expense"
+],
+[
+"66",
+"Inventory",
+"Asset",
+"Other Current Asset"
+],
+[
+"67",
+"Insurance - Liability",
+"Expense",
+"Expense"
+],
+[
+"68",
+"Insurance - Disability",
+"Expense",
+"Expense"
+],
+[
+"69",
+"Goodwill",
+"Asset",
+"Other Asset"
+],
+[
+"7",
+"Travel Expenses - General and Admin Expenses",
+"Expense",
+"Expense"
+],
+[
+"70",
+"Inbound Freight & Import Costs:Freight and delivery - COS",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"71",
+"Allowance for bad debt",
+"Asset",
+"Other Current Asset"
+],
+[
+"72",
+"Short-term debit",
+"Liability",
+"Other Current Liability"
+],
+[
+"73",
+"Payroll Expenses",
+"Expense",
+"Expense"
+],
+[
+"74",
+"Accrued Liabilites:Payroll Liabilities",
+"Liability",
+"Other Current Liability"
+],
+[
+"75",
+"Payroll Clearing",
+"Liability",
+"Other Current Liability"
+],
+[
+"76",
+"Retained Earnings",
+"Equity",
+"Equity"
+],
+[
+"77",
+"Sales",
+"Revenue",
+"Income"
+],
+[
+"78",
+"Deferred Revenue",
+"Liability",
+"Other Current Liability"
+],
+[
+"79",
+"Billable Expense Income",
+"Revenue",
+"Income"
+],
+[
+"8",
+"Shipping and delivery expense",
+"Expense",
+"Expense"
+],
+[
+"80",
+"Purchases",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"81",
+"Sales of Product Income",
+"Revenue",
+"Income"
+],
+[
+"82",
+"Cost of sales",
+"Expense",
+"Cost of Goods Sold"
+],
+[
+"83",
+"Inventory Asset",
+"Asset",
+"Other Current Asset"
+],
+[
+"84",
+"Undeposited Funds",
+"Asset",
+"Other Current Asset"
+],
+[
+"85",
+"VAT Control",
+"Liability",
+"Other Current Liability"
+],
+[
+"86",
+"VAT Suspense",
+"Liability",
+"Other Current Liability"
+],
+[
+"87",
+"Opening Balance Equity",
+"Equity",
+"Equity"
+],
+[
+"9",
+"Share capital",
+"Equity",
+"Equity"
+],
+[
+"93",
+"Accounts Receivable (A/R)",
+"Asset",
+"Accounts Receivable"
+],
+[
+"94",
+"Bank of Baroda - KES",
+"Asset",
+"Bank"
+],
+[
+"95",
+"Cash and Cash Equivalents:Petty Cash",
+"Asset",
+"Bank"
+],
+[
+"96",
+"Unapplied Cash Payment Income",
+"Revenue",
+"Income"
+],
+[
+"99",
+"Accounts Payable (A/P)",
+"Liability",
+"Accounts Payable"
+]
+]

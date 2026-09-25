@@ -30,8 +30,10 @@ def execute(filters=None):
     by_account = f.group_by == "Account"
     notes = []
 
-    lines = frappe.get_all(
-        "Audited FS Line", fields=["name", "label", "note", "section", "nature"], order_by="`order` asc")
+    # `order` is a reserved word and get_all rejects it in order_by, so sort here.
+    lines = sorted(
+        frappe.get_all("Audited FS Line", fields=["name", "label", "note", "section", "nature", "order"]),
+        key=lambda l: l.order or 0)
     if not lines:
         frappe.throw("No Audited FS Lines yet. The seed patch runs on migrate.")
     natures = {l.name: l.nature for l in lines}

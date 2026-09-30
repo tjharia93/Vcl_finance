@@ -1,0 +1,129 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-30 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "month",
+  "customer_key",
+  "side",
+  "txn_date",
+  "voucher_type",
+  "doc_no",
+  "col",
+  "amount",
+  "match_status",
+  "memo"
+ ],
+ "fields": [
+  {
+   "fieldname": "month",
+   "fieldtype": "Link",
+   "label": "Month",
+   "options": "AR Control Month",
+   "reqd": 1,
+   "in_standard_filter": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "customer_key",
+   "fieldtype": "Data",
+   "label": "Customer key",
+   "reqd": 1,
+   "in_list_view": 1,
+   "search_index": 1
+  },
+  {
+   "fieldname": "side",
+   "fieldtype": "Select",
+   "label": "Book",
+   "options": "QBO\nERPNext",
+   "reqd": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "txn_date",
+   "fieldtype": "Date",
+   "label": "Date",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "voucher_type",
+   "fieldtype": "Data",
+   "label": "Type",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "doc_no",
+   "fieldtype": "Data",
+   "label": "Document"
+  },
+  {
+   "fieldname": "col",
+   "fieldtype": "Select",
+   "label": "Column",
+   "options": "invoices\npayments\ncredit_notes\njournals"
+  },
+  {
+   "fieldname": "amount",
+   "fieldtype": "Currency",
+   "label": "Amount (effect on receivable)",
+   "precision": "2",
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "match_status",
+   "fieldtype": "Select",
+   "label": "Match",
+   "options": "Matched\nOnly in QBO\nOnly in ERPNext",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "memo",
+   "fieldtype": "Small Text",
+   "label": "Memo"
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-30 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Book Alignment",
+ "name": "AR Control Txn",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Accounts Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Accounts User",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "hash",
+ "sort_field": "txn_date",
+ "track_changes": 0
+}

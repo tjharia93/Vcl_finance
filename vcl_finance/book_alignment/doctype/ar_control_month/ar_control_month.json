@@ -1,0 +1,258 @@
+{
+ "actions": [],
+ "allow_rename": 0,
+ "creation": "2026-09-30 00:00:00",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "month",
+  "status",
+  "from_date",
+  "to_date",
+  "last_synced",
+  "cb1",
+  "qbo_opening",
+  "qbo_invoices",
+  "qbo_payments",
+  "qbo_credit_notes",
+  "qbo_journals",
+  "qbo_closing",
+  "cb2",
+  "erp_opening",
+  "erp_invoices",
+  "erp_payments",
+  "erp_credit_notes",
+  "erp_journals",
+  "erp_closing",
+  "cb3",
+  "var_closing",
+  "gross_variance",
+  "lines_off",
+  "lines_total",
+  "qbo_self_check_total",
+  "history_section",
+  "history"
+ ],
+ "fields": [
+  {
+   "fieldname": "month",
+   "fieldtype": "Data",
+   "label": "Month",
+   "reqd": 1,
+   "unique": 1,
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Open\nLocked",
+   "default": "Open",
+   "in_list_view": 1,
+   "in_standard_filter": 1
+  },
+  {
+   "fieldname": "from_date",
+   "fieldtype": "Date",
+   "label": "From",
+   "read_only": 1
+  },
+  {
+   "fieldname": "to_date",
+   "fieldtype": "Date",
+   "label": "To",
+   "read_only": 1
+  },
+  {
+   "fieldname": "last_synced",
+   "fieldtype": "Datetime",
+   "label": "Last synced",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "cb1",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "qbo_opening",
+   "fieldtype": "Currency",
+   "label": "QBO opening",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qbo_invoices",
+   "fieldtype": "Currency",
+   "label": "QBO invoices",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qbo_payments",
+   "fieldtype": "Currency",
+   "label": "QBO payments",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qbo_credit_notes",
+   "fieldtype": "Currency",
+   "label": "QBO credit notes",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qbo_journals",
+   "fieldtype": "Currency",
+   "label": "QBO journals & withholding",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qbo_closing",
+   "fieldtype": "Currency",
+   "label": "QBO closing",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb2",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "erp_opening",
+   "fieldtype": "Currency",
+   "label": "ERPNext opening",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_invoices",
+   "fieldtype": "Currency",
+   "label": "ERPNext invoices",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_payments",
+   "fieldtype": "Currency",
+   "label": "ERPNext payments",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_credit_notes",
+   "fieldtype": "Currency",
+   "label": "ERPNext credit notes",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_journals",
+   "fieldtype": "Currency",
+   "label": "ERPNext journals & withholding",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "erp_closing",
+   "fieldtype": "Currency",
+   "label": "ERPNext closing",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "cb3",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "var_closing",
+   "fieldtype": "Currency",
+   "label": "Variance closing (ERP \u2212 QBO)",
+   "precision": "2",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "gross_variance",
+   "fieldtype": "Currency",
+   "label": "Gross variance (\u03a3|var|)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "lines_off",
+   "fieldtype": "Int",
+   "label": "Customers off",
+   "read_only": 1,
+   "in_list_view": 1
+  },
+  {
+   "fieldname": "lines_total",
+   "fieldtype": "Int",
+   "label": "Customers",
+   "read_only": 1
+  },
+  {
+   "fieldname": "qbo_self_check_total",
+   "fieldtype": "Currency",
+   "label": "QBO self-check (roll-forward \u2212 aged)",
+   "precision": "2",
+   "read_only": 1
+  },
+  {
+   "fieldname": "history_section",
+   "fieldtype": "Section Break",
+   "label": "Daily sync history"
+  },
+  {
+   "fieldname": "history",
+   "fieldtype": "Table",
+   "label": "History",
+   "options": "AR Control History",
+   "read_only": 1
+  }
+ ],
+ "links": [],
+ "modified": "2026-09-30 00:00:00",
+ "modified_by": "Administrator",
+ "module": "Book Alignment",
+ "name": "AR Control Month",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "role": "System Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "delete": 1,
+   "report": 1,
+   "export": 1,
+   "print": 1,
+   "email": 1,
+   "share": 1
+  },
+  {
+   "role": "Accounts Manager",
+   "read": 1,
+   "write": 1,
+   "create": 1,
+   "report": 1,
+   "export": 1
+  },
+  {
+   "role": "Accounts User",
+   "read": 1,
+   "report": 1,
+   "export": 1
+  }
+ ],
+ "sort_order": "DESC",
+ "states": [],
+ "autoname": "field:month",
+ "sort_field": "month",
+ "title_field": "month",
+ "track_changes": 0
+}

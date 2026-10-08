@@ -44,6 +44,16 @@
   "override_reason",
   "journal_entry",
   "posted_on",
+  "section_vat",
+  "vat_treatment",
+  "vat_amount",
+  "net_amount",
+  "vat_basis",
+  "col_vat",
+  "supplier_ref",
+  "vat_set_by",
+  "vat_set_on",
+  "qbo_queue",
   "section_ask",
   "receipt_asked_from",
   "receipt_asked_on",
@@ -455,6 +465,76 @@
    "length": 180,
    "permlevel": 1,
    "description": "What the accountant reads against this line in ERPNext and QuickBooks. Set at approval by whoever knows what the payment was actually for \u2014 the payee name alone often does not say. Blank falls back to the date and payee."
+  },
+  {
+   "fieldname": "section_vat",
+   "fieldtype": "Section Break",
+   "label": "VAT"
+  },
+  {
+   "fieldname": "vat_treatment",
+   "fieldtype": "Select",
+   "label": "VAT treatment",
+   "options": "\nStandard 16%\nPetrol 8%\nExempt\nNo VAT\nNot applicable",
+   "permlevel": 1,
+   "description": "Set by Finance at review. Blank means not reviewed yet. Wages and Loan never carry VAT."
+  },
+  {
+   "fieldname": "vat_amount",
+   "fieldtype": "Currency",
+   "label": "VAT amount",
+   "permlevel": 1,
+   "description": "Part of the amount paid that is VAT. Worked out from the treatment; Finance may type what the receipt shows."
+  },
+  {
+   "fieldname": "net_amount",
+   "fieldtype": "Currency",
+   "label": "Net amount",
+   "permlevel": 1,
+   "read_only": 1,
+   "description": "Amount paid less VAT. Always worked out, never typed."
+  },
+  {
+   "fieldname": "col_vat",
+   "fieldtype": "Column Break"
+  },
+  {
+   "fieldname": "supplier_ref",
+   "fieldtype": "Data",
+   "label": "Supplier invoice / receipt no",
+   "permlevel": 1
+  },
+  {
+   "fieldname": "vat_set_by",
+   "fieldtype": "Link",
+   "label": "VAT set by",
+   "options": "User",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "vat_set_on",
+   "fieldtype": "Datetime",
+   "label": "VAT set on",
+   "permlevel": 1,
+   "read_only": 1
+  },
+  {
+   "fieldname": "qbo_queue",
+   "fieldtype": "Data",
+   "label": "QuickBooks queue row",
+   "permlevel": 1,
+   "read_only": 1,
+   "description": "The QBO Petty Cash Journal row this entry was staged in."
+  },
+  {
+   "fieldname": "vat_basis",
+   "fieldtype": "Data",
+   "label": "VAT worked out from",
+   "permlevel": 1,
+   "read_only": 1,
+   "hidden": 1,
+   "description": "Treatment and amount the stored VAT was worked out from. If either changes later the VAT is flagged as out of date."
   }
  ],
  "index_web_pages_for_search": 0,

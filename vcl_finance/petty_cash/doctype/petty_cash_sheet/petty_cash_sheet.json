@@ -49,6 +49,7 @@
   "col_break_status",
   "amended_from",
   "journal_entry",
+  "qbo_queue",
   "backfill",
   "section_notes",
   "notes",
@@ -369,6 +370,14 @@
    "fieldtype": "Small Text",
    "label": "Review Pack Sent To",
    "read_only": 1
+  },
+  {
+   "fieldname": "qbo_queue",
+   "fieldtype": "Data",
+   "label": "QuickBooks queue row",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "The QBO Petty Cash Journal row this week was staged in."
   }
  ],
  "links": [],

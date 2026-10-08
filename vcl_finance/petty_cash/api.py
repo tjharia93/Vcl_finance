@@ -692,6 +692,25 @@ def approve_week(sheet):
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
     if doc.status != "Closed":
         frappe.throw("A week must be Closed before it can be approved.")
+    # The week is the second signature, so every entry in it must already carry the
+    # first. Without this a week could be approved with entries still open, and the
+    # posting run would then hold them back without the sheet ever saying so.
+    # Entries are matched by the sheet they came from AND by the week and float they sit in,
+    # so a native entry (no source sheet) or one dated into this week is not missed.
+    base = {"cancelled": 0, "sync_state": ["!=", "Orphaned"],
+            "status": ["not in", ["Approved", "Void"]], "amount": ["!=", 0]}
+    seen = {}
+    for extra in ({"origin_sheet": doc.name}, {"week_ending": doc.week_ending, "float": doc.float}):
+        for e in frappe.get_all("Petty Cash Entry", filters={**base, **extra},
+                                fields=["name", "amount"], limit_page_length=0):
+            seen[e["name"]] = e
+    open_entries = list(seen.values())
+    if open_entries:
+        frappe.throw(
+            f"{len(open_entries)} entr{'y is' if len(open_entries) == 1 else 'ies are'} not approved yet "
+            f"(KES {sum(flt(e['amount']) for e in open_entries):,.2f}). Approve every entry first, "
+            f"then approve the week.",
+            title="Entries still open")
     doc.status = "Approved"
     doc.approved_by = frappe.session.user
     doc.approved_on = frappe.utils.now_datetime()

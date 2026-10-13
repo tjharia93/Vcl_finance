@@ -68,7 +68,8 @@ def _entries(week_ending, float_name):
         fields=["name", "txn_date", "float", "company", "source_type", "source_key", "recipient", "notes", "memo",
                 "amount", "cash_in", "status", "cancelled", "posting_account", "qbo_account", "journal_entry",
                 "posted_on", "receipt", "receipt_etr", "pc_received", "etr_received", "vat_treatment",
-                "vat_amount", "net_amount", "vat_basis", "qbo_queue", "sync_state"],
+                "vat_amount", "net_amount", "vat_basis", "qbo_queue", "sync_state", "exclude_from_posting",
+                "exclude_reason"],
         order_by="txn_date asc, creation asc", limit_page_length=0)
     # An entry whose sheet row was deleted is Orphaned and stops counting, EXCEPT while it
     # is still linked to a journal: dropping it from view would make a re-post rebuild the

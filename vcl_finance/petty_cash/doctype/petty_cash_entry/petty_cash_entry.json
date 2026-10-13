@@ -44,6 +44,10 @@
   "override_reason",
   "journal_entry",
   "posted_on",
+  "exclude_from_posting",
+  "exclude_reason",
+  "excluded_by",
+  "excluded_on",
   "section_vat",
   "vat_treatment",
   "vat_amount",
@@ -448,6 +452,37 @@
    "read_only": 1,
    "permlevel": 1,
    "description": "When the posting run picked this line up. Not the journal's posting date \u2014 that is the week ending."
+  },
+  {
+   "fieldname": "exclude_from_posting",
+   "fieldtype": "Check",
+   "label": "Keep out of the books",
+   "default": "0",
+   "permlevel": 1,
+   "description": "Finance: this line is never posted to ERPNext or QuickBooks. Set through entry_api.set_exclude."
+  },
+  {
+   "fieldname": "exclude_reason",
+   "fieldtype": "Small Text",
+   "label": "Why it is kept out",
+   "permlevel": 1,
+   "depends_on": "exclude_from_posting"
+  },
+  {
+   "fieldname": "excluded_by",
+   "fieldtype": "Data",
+   "label": "Kept out by",
+   "read_only": 1,
+   "permlevel": 1,
+   "depends_on": "exclude_from_posting"
+  },
+  {
+   "fieldname": "excluded_on",
+   "fieldtype": "Datetime",
+   "label": "Kept out on",
+   "read_only": 1,
+   "permlevel": 1,
+   "depends_on": "exclude_from_posting"
   },
   {
    "fieldname": "qbo_account",

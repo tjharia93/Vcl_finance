@@ -114,7 +114,8 @@ def vat_week(week_ending, float_name=None, **kwargs):
         "Petty Cash Entry", filters=filters,
         fields=["name", "txn_date", "float", "company", "source_type", "source_key", "recipient", "notes", "memo",
                 "amount", "cash_in", "status", "receipt", "receipt_etr", "pc_received", "etr_received",
-                "vat_treatment", "vat_amount", "net_amount", "vat_basis", "supplier_ref", "journal_entry"],
+                "vat_treatment", "vat_amount", "net_amount", "vat_basis", "supplier_ref", "journal_entry",
+                "exclude_from_posting"],
         order_by="txn_date asc, creation asc", limit_page_length=0)
     out = []
     for e in rows:
@@ -125,4 +126,4 @@ def vat_week(week_ending, float_name=None, **kwargs):
     return {"week_ending": week_ending, "float": float_name, "treatments": C.TREATMENT_ORDER,
             "entries": out,
             "unreviewed": sum(1 for x in out if x["effective_treatment"] is None and not cint(x["cash_in"])
-                              and x["status"] != "Void" and x["amount"])}
+                              and x["status"] != "Void" and x["amount"] and not cint(x["exclude_from_posting"]))}

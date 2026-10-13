@@ -299,6 +299,41 @@ def set_line_account(entry, account, reason=None, apply_to_route=0, company=None
             "mapped_account": proposed, "taught": promoted}
 
 
+@frappe.whitelist(methods=["POST"])
+def set_exclude(entry, exclude=1, reason=None):
+    """Keep one line out of both books, or put it back.
+
+    For a payment that is real cash out of the tin but is booked somewhere else
+    (another company's payroll, a personal advance settled outside petty cash).
+    The line stays on the sheet and in the cash totals; only posting skips it.
+    Voiding is the wrong tool for that: it says the money never left.
+
+    A reason is required to keep a line out, because a line nobody can explain
+    is the first thing an auditor asks about. Refused once the line is in a
+    journal: undo that posting first.
+    """
+    _assert_finance()
+    doc = _get(entry)
+    if doc.journal_entry:
+        frappe.throw(_("{0} is already in journal {1}. Undo that posting first.")
+                     .format(doc.name, doc.journal_entry), title=_("Already posted"))
+    if cint(exclude):
+        if not (reason or "").strip():
+            frappe.throw(_("Say why this line is kept out of the books."), title=_("Reason required"))
+        doc.exclude_from_posting = 1
+        doc.exclude_reason = reason.strip()[:500]
+        doc.excluded_by = frappe.session.user
+        doc.excluded_on = now_datetime()
+    else:
+        doc.exclude_from_posting = 0
+        doc.exclude_reason = None
+        doc.excluded_by = None
+        doc.excluded_on = None
+    doc.save()
+    return {"entry": doc.name, "exclude_from_posting": doc.exclude_from_posting,
+            "exclude_reason": doc.exclude_reason}
+
+
 def _teach_map(doc, account, qbo_account=None):
     """Write an approver's choice onto the route's map row, unapproved.
 

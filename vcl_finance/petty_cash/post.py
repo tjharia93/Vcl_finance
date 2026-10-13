@@ -104,6 +104,10 @@ def _classify(e):
         return POSTED, e.get("posting_account"), None
     if e.get("cancelled") or e.get("status") == "Void":
         return EXCLUDED, None, "Voided"
+    if e.get("exclude_from_posting"):
+        # Before the account check on purpose: a line kept out stays out even if an
+        # account was picked for it earlier.
+        return EXCLUDED, None, "Kept out of the books: " + (e.get("exclude_reason") or "no reason given")
     if e.get("status") != "Approved":
         return BLOCKED, None, "Not approved yet"
     if not flt(e.get("amount")):
@@ -131,7 +135,7 @@ def _entries(week_ending, float_name):
         "Petty Cash Entry", filters=filters,
         fields=["name", "txn_date", "float", "company", "source_type", "source_key",
                 "recipient", "notes", "memo", "amount", "cash_in", "status", "cancelled",
-                "posting_account", "journal_entry", "posted_on"],
+                "posting_account", "journal_entry", "posted_on", "exclude_from_posting", "exclude_reason"],
         order_by="txn_date asc, creation asc", limit_page_length=0,
     )
 

@@ -127,10 +127,26 @@ def _classify(e):
     return READY, r["erp_account"], None
 
 
+def sheet_filters(week_ending, float_name):
+    """Which entries belong to the sheet for this week and float.
+
+    The sheet is the posting unit: it is what the custodian closed and Finance approved.
+    Matching on the entry's own week_ending missed every May and June sheet, which were
+    saved on Fridays, Sundays and Mondays while each entry is filed into its Sun-Sat week
+    (PCS-2026-00014, stored 07/06, has 48 lines in the week ending 06/06 and 13 in 13/06,
+    so it looked empty). Lines are matched on origin_sheet; an entry with no sheet at all
+    (keyed straight in, never mirrored) still falls back to the week date.
+    """
+    name = frappe.db.get_value("Petty Cash Sheet", {"week_ending": week_ending, "float": float_name}, "name")
+    if not name:
+        return {"week_ending": week_ending, "float": float_name}, None
+    return {"origin_sheet": name}, name
+
+
 def _entries(week_ending, float_name):
     filters = {"week_ending": week_ending}
     if float_name:
-        filters["float"] = float_name
+        filters = sheet_filters(week_ending, float_name)[0]
     return frappe.get_all(
         "Petty Cash Entry", filters=filters,
         fields=["name", "txn_date", "float", "company", "source_type", "source_key",

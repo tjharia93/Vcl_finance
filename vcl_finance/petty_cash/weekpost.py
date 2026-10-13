@@ -61,16 +61,23 @@ def _sheet(week_ending, float_name):
     return frappe.db.get_value(SHEET, name, ["name", "status", "company", "journal_entry", "qbo_queue"], as_dict=True)
 
 
-def _entries(week_ending, float_name):
-    rows = frappe.get_all(
-        "Petty Cash Entry",
-        filters={"week_ending": week_ending, "float": float_name},
-        fields=["name", "txn_date", "float", "company", "source_type", "source_key", "recipient", "notes", "memo",
+ENTRY_FIELDS = ["name", "txn_date", "float", "company", "source_type", "source_key", "recipient", "notes", "memo",
                 "amount", "cash_in", "status", "cancelled", "posting_account", "qbo_account", "journal_entry",
                 "posted_on", "receipt", "receipt_etr", "pc_received", "etr_received", "vat_treatment",
                 "vat_amount", "net_amount", "vat_basis", "qbo_queue", "sync_state", "exclude_from_posting",
-                "exclude_reason"],
-        order_by="txn_date asc, creation asc", limit_page_length=0)
+                "exclude_reason"]
+
+
+def _entries(week_ending, float_name):
+    filters, sheet_name = P.sheet_filters(week_ending, float_name)
+    rows = frappe.get_all("Petty Cash Entry", filters=filters, fields=ENTRY_FIELDS,
+                          order_by="txn_date asc, creation asc", limit_page_length=0)
+    if sheet_name:
+        seen = {e["name"] for e in rows}
+        rows += [e for e in frappe.get_all(
+            "Petty Cash Entry", fields=ENTRY_FIELDS, limit_page_length=0,
+            filters=[["week_ending", "=", week_ending], ["float", "=", float_name], ["origin_sheet", "is", "not set"]])
+            if e["name"] not in seen]
     # An entry whose sheet row was deleted is Orphaned and stops counting, EXCEPT while it
     # is still linked to a journal: dropping it from view would make a re-post rebuild the
     # draft without it while the entry still points at that draft.

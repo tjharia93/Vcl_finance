@@ -109,7 +109,9 @@ def vat_week(week_ending, float_name=None, **kwargs):
     float_name = float_name or kwargs.get("float")
     filters = {"week_ending": week_ending, "cancelled": 0, "sync_state": ["!=", "Orphaned"]}
     if float_name:
-        filters["float"] = float_name
+        # The sheet's lines, not the week date: May/June sheets are stored on off-Saturdays.
+        from vcl_finance.petty_cash.post import sheet_filters
+        filters = dict(sheet_filters(week_ending, float_name)[0], cancelled=0, sync_state=["!=", "Orphaned"])
     rows = frappe.get_all(
         "Petty Cash Entry", filters=filters,
         fields=["name", "txn_date", "float", "company", "source_type", "source_key", "recipient", "notes", "memo",

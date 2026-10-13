@@ -221,6 +221,7 @@ def preview(week_ending, float_name=None, line_mode="grouped", **kwargs):
     return {
         "week_ending": week_ending, "float": float_name, "sheet": sheet, "gates": gates,
         "can_post_erp": ok and bool(b[P.READY]),
+        "companies_filter": True,   # post_erp accepts ``companies``; the page checks this before offering a choice
         "can_stage_qbo": sheet["status"] == "Approved" and bool(b[P.POSTED]) and not qblocked,
         "counts": {k: len(v) for k, v in b.items()}, "entries": len(rows),
         "held": sorted(held.values(), key=lambda h: -h["value"]),
@@ -237,6 +238,25 @@ def preview(week_ending, float_name=None, line_mode="grouped", **kwargs):
     }
 
 
+def _only_companies(rows, b, companies):
+    """Narrow a survey to the companies being posted. ``companies`` is a list, a JSON
+    list or a comma string; empty means every company, as before.
+
+    Some companies' petty cash is not booked in ERPNext at all (Bahati Ventures), so a
+    week has to be postable for one company while another's lines stay where they are.
+    Lines of the companies left out are untouched: not linked, not stamped, still ready.
+    """
+    if not companies:
+        return rows, b
+    if isinstance(companies, str):
+        companies = json.loads(companies) if companies.strip().startswith("[") else companies.split(",")
+    keep = {c.strip() for c in companies if c and c.strip()}
+    if not keep:
+        frappe.throw(_("Pick at least one company to post."))
+    co = lambda e: e.get("company") or R.COMPANY   # noqa: E731
+    return [e for e in rows if co(e) in keep], {k: [e for e in v if co(e) in keep] for k, v in b.items()}
+
+
 def _require_gates(sheet, rows, b, allow_partial):
     gates = _gates(sheet, rows, b, _carry(b))
     bad = [g for g in gates if not g["ok"]]
@@ -250,12 +270,16 @@ def _require_gates(sheet, rows, b, allow_partial):
 
 
 @frappe.whitelist(methods=["POST"])
-def post_erp(week_ending, float_name=None, line_mode="grouped", allow_partial=0, **kwargs):
-    """Raise the week's DRAFT ERPNext journal and link every entry to it. Never submits."""
+def post_erp(week_ending, float_name=None, line_mode="grouped", allow_partial=0, companies=None, **kwargs):
+    """Raise the week's DRAFT ERPNext journal and link every entry to it. Never submits.
+
+    ``companies`` limits the run to those companies; the others' lines are left as they are.
+    """
     P._guard()
     float_name = float_name or kwargs.get("float")
     sheet = _sheet(week_ending, float_name)
     rows, b = _survey(week_ending, float_name)
+    rows, b = _only_companies(rows, b, companies)
     _require_gates(sheet, rows, b, allow_partial)
     if not b[P.READY]:
         frappe.throw(_("Nothing is ready to post in this week."))

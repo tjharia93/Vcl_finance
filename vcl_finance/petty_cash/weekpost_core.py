@@ -202,30 +202,86 @@ def build_erp_lines(lines, cash_account, vat_account, mode="grouped"):
 # QuickBooks expense
 # ---------------------------------------------------------------------------
 
-def build_qbo_lines(lines):
-    """Group by (QuickBooks account, tax code). ``lines`` carry qbo_account and treatment."""
+def etr_parts(ref):
+    """(pin, etr) from ``supplier_ref``. The VAT screen stores ``PIN|CU invoice number``;
+    a ref without the bar is a plain receipt number and comes back as (None, None)."""
+    ref = (ref or "").strip()
+    if "|" not in ref:
+        return None, None
+    pin, _, cu = ref.partition("|")
+    return (pin.strip() or None), (cu.strip() or None)
+
+
+def qbo_description(ln):
+    """What a person reconciling QuickBooks reads on one line.
+
+    ``dd/mm/yyyy · what kind · what it was / who was paid · notes · ETR <CU no> · PIN · PCE``.
+    The ETR (CU invoice number) is what ties the line to the KRA record; the PCE number
+    ties it back to the petty cash entry. Codes like "SE" never appear: ``kind`` is the
+    category's name.
+    """
+    d = str(ln.get("txn_date") or "")[:10]
+    parts = ["/".join(reversed(d.split("-"))) if d else ""]
+    kind = (ln.get("kind") or "").strip()
+    parts.append(kind)
+    seen = {kind.lower()}
+    for f in ("subject", "notes"):
+        v = " ".join(str(ln.get(f) or "").split())
+        if v and v.lower() not in seen:
+            parts.append(v[:120])
+            seen.add(v.lower())
+    pin, etr = etr_parts(ln.get("supplier_ref"))
+    ref = (ln.get("supplier_ref") or "").strip()
+    if etr:
+        parts.append(f"ETR {etr}")
+    elif ref:
+        parts.append(f"Receipt {ref}")
+    if pin:
+        parts.append(f"PIN {pin}")
+    parts.append(ln["name"])
+    return " · ".join(p for p in parts if p)[:4000]
+
+
+def build_qbo_lines(lines, per_entry=False):
+    """Group by (QuickBooks account, tax code). ``lines`` carry qbo_account and treatment.
+
+    ``per_entry`` gives one line per entry instead, described by ``qbo_description``: that
+    is what is SENT, so every line in QuickBooks names its date, purpose and ETR. The
+    grouped form is the on-screen summary.
+    """
     by = {}
     for ln in lines:
         key = (str(ln["qbo_account"]), qbo_tax_code(ln["treatment"]))
+        if per_entry:
+            key = (str(ln.get("txn_date") or ""), ln["name"]) + key
         by.setdefault(key, []).append(ln)
     out = []
-    for (acct, tax) in sorted(by):
-        grp = by[(acct, tax)]
+    for key in sorted(by):
+        acct, tax = key[-2], key[-1]
+        grp = by[key]
         gross = r2(sum(x["gross"] for x in grp))
         rate = next((t["rate"] for t in TREATMENTS.values() if t["qbo_tax"] == tax and t["rate"]), 0.0)
         vat = r2(sum(x["vat"] for x in grp))
         vat_qbo = r2(gross * rate / (1 + rate)) if rate else 0.0
+        desc = (qbo_description(grp[0]) if per_entry else
+                f"{grp[0].get('label') or 'Petty cash'}: {len(grp)} entr{'y' if len(grp) == 1 else 'ies'} {_ids(grp, 25)}"[:4000])
         out.append({
             "qbo_account": acct, "tax_code": tax, "amount": gross,
             "vat": vat, "vat_qbo": vat_qbo, "vat_gap": r2(vat - vat_qbo),
-            "description": f"{grp[0].get('label') or 'Petty cash'}: {len(grp)} entr{'y' if len(grp) == 1 else 'ies'} {_ids(grp, 25)}"[:4000],
+            "description": desc,
             "entries": [x["name"] for x in grp],
         })
     return out
 
 
 def build_qbo_payload(lines, petty_cash_account, week_ending, doc_number, private_note):
-    """The Purchase object, tax-inclusive. None when there is nothing to send."""
+    """The Purchase object, tax-inclusive. None when there is nothing to send.
+
+    On a TaxInclusive Purchase QuickBooks reads ``Amount`` as the NET and adds the tax on
+    top unless the line also carries ``TaxInclusiveAmt`` (the gross). Sending the gross as
+    ``Amount`` overstated Expense 54170 (week 10/10/2026) by its VAT, 552.00. So each line
+    sends net = gross - VAT and the gross alongside, and QuickBooks' total is the cash paid.
+    """
     if not lines:
         return None
     return {
@@ -237,11 +293,12 @@ def build_qbo_payload(lines, petty_cash_account, week_ending, doc_number, privat
         "GlobalTaxCalculation": "TaxInclusive",
         "Line": [{
             "DetailType": "AccountBasedExpenseLineDetail",
-            "Amount": ln["amount"],
+            "Amount": r2(ln["amount"] - ln.get("vat_qbo", 0.0)),
             "Description": ln["description"],
             "AccountBasedExpenseLineDetail": {
                 "AccountRef": {"value": ln["qbo_account"]},
                 "TaxCodeRef": {"value": ln["tax_code"]},
+                "TaxInclusiveAmt": ln["amount"],
             },
         } for ln in lines],
     }

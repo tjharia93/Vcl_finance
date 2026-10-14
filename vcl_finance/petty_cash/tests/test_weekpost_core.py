@@ -166,6 +166,15 @@ class QboLines(unittest.TestCase):
         self.assertEqual(p["AccountRef"], {"value": "95"})
         self.assertEqual(p["Line"][0]["AccountBasedExpenseLineDetail"]["TaxCodeRef"], {"value": "10"})
         self.assertEqual(p["Line"][0]["Amount"], 200.0)
+        self.assertEqual(p["Line"][0]["AccountBasedExpenseLineDetail"]["TaxInclusiveAmt"], 200.0)
+
+    def test_taxed_line_sends_net_as_amount_and_gross_as_inclusive(self):
+        # QuickBooks adds VAT on top of Amount unless TaxInclusiveAmt carries the gross (54170 was +552).
+        out = C.build_qbo_lines([dict(name="a", qbo_account="101", treatment="Standard 16%", gross=1950, vat=268.97, label="SE"),
+                                 dict(name="b", qbo_account="1", treatment="Petrol 8%", gross=2000, vat=148.15, label="Fuel")], per_entry=True)
+        p = C.build_qbo_payload(out, "95", "2026-10-10", "x", "y")
+        got = {l["AccountBasedExpenseLineDetail"]["TaxInclusiveAmt"]: l["Amount"] for l in p["Line"]}
+        self.assertEqual(got, {1950: 1681.03, 2000: 1851.85})
 
     def test_nothing_to_send(self):
         self.assertIsNone(C.build_qbo_payload([], "95", "2026-10-03", "x", "y"))
@@ -185,6 +194,30 @@ class QboLines(unittest.TestCase):
               dict(name="b", qbo_account="235", treatment="No VAT", gross=500, vat=0, label="Parking")]
         out = C.build_qbo_lines(ls)
         self.assertEqual(round(sum(o["amount"] for o in out), 2), 1660.0)
+
+    def test_per_entry_line_names_date_kind_etr_and_entry(self):
+        ln = dict(name="PCE-2026-02444", qbo_account="101", treatment="Standard 16%", gross=1950, vat=268.97,
+                  txn_date="2026-10-06", kind="Spares / Engineering", subject="3pcs PPR ELBOW", notes="SPARES",
+                  supplier_ref="|0090773260000015419")
+        out = C.build_qbo_lines([ln], per_entry=True)
+        self.assertEqual(out[0]["description"],
+                         "06/10/2026 · Spares / Engineering · 3pcs PPR ELBOW · SPARES · ETR 0090773260000015419 · PCE-2026-02444")
+
+    def test_per_entry_skips_repeats_and_shows_pin(self):
+        ln = dict(name="E1", qbo_account="1", treatment="Petrol 8%", gross=2000, vat=148.15, txn_date="2026-10-05",
+                  kind="Bike Fuel", subject="Bike Fuel", supplier_ref="P051234567X|276087800")
+        self.assertEqual(C.qbo_description(ln), "05/10/2026 · Bike Fuel · ETR 276087800 · PIN P051234567X · E1")
+
+    def test_per_entry_plain_receipt_ref(self):
+        ln = dict(name="E1", txn_date="2026-10-05", kind="Food", subject="Milk", supplier_ref="R-889")
+        self.assertEqual(C.qbo_description(ln), "05/10/2026 · Food · Milk · Receipt R-889 · E1")
+
+    def test_per_entry_keeps_every_entry_and_the_total(self):
+        ls = [dict(name="a", qbo_account="56", treatment="No VAT", gross=100, vat=0, txn_date="2026-10-05", kind="Food"),
+              dict(name="b", qbo_account="56", treatment="No VAT", gross=250, vat=0, txn_date="2026-10-04", kind="Food")]
+        out = C.build_qbo_lines(ls, per_entry=True)
+        self.assertEqual([o["entries"] for o in out], [["b"], ["a"]])
+        self.assertEqual(round(sum(o["amount"] for o in out), 2), 350.0)
 
 
 if __name__ == "__main__":

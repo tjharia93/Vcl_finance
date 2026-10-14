@@ -65,7 +65,7 @@ ENTRY_FIELDS = ["name", "txn_date", "float", "company", "source_type", "source_k
                 "amount", "cash_in", "status", "cancelled", "posting_account", "qbo_account", "journal_entry",
                 "posted_on", "receipt", "receipt_etr", "pc_received", "etr_received", "vat_treatment",
                 "vat_amount", "net_amount", "vat_basis", "qbo_queue", "sync_state", "exclude_from_posting",
-                "exclude_reason"]
+                "exclude_reason", "supplier_ref"]
 
 
 def _entries(week_ending, float_name):
@@ -100,9 +100,21 @@ def _survey(week_ending, float_name):
     return rows, out
 
 
+def _kind(e):
+    """The plain-words name of what an entry was, for the QuickBooks line: the category's
+    label for a voucher ("Spares / Engineering", never "SE"), else the entry type."""
+    st, sk = e.get("source_type") or "", (e.get("source_key") or "").strip()
+    if st == "Voucher Category" and sk:
+        return frappe.get_cached_value("Petty Cash Category", sk, "label") or sk
+    if st == "Wages Entry" and sk:
+        return f"Wages: {sk}"
+    return st or "Petty cash"
+
+
 def _line(e):
     return {"name": e["name"], "account": e["_account"], "gross": flt(e["amount"], 2), "net": e["_net"],
             "vat": e["_vat"], "subject": P._subject(e), "txn_date": e.get("txn_date"),
+            "kind": _kind(e), "notes": e.get("notes"), "supplier_ref": e.get("supplier_ref"),
             "treatment": e["_treatment"], "source_type": e["source_type"], "source_key": e.get("source_key"),
             "company": e.get("company") or R.COMPANY, "chosen_qbo": e.get("qbo_account")}
 
@@ -221,7 +233,7 @@ def preview(week_ending, float_name=None, line_mode="grouped", **kwargs):
     qlines, qblocked = _qbo_lines(b[P.POSTED] + b[P.READY])
     qgroups = C.build_qbo_lines(qlines)
     doc_number = Q.doc_number(float_name, week_ending)
-    payload = C.build_qbo_payload(qgroups, Q.QBO_PETTY_CASH, week_ending, doc_number,
+    payload = C.build_qbo_payload(C.build_qbo_lines(qlines, per_entry=True), Q.QBO_PETTY_CASH, week_ending, doc_number,
                                   f"Petty cash {float_name}, week ending {week_ending}. Raised from the petty cash app.")
     journals = sorted({e["journal_entry"] for e in b[P.POSTED] if e.get("journal_entry")})
     not_posted_yet = [e for e in b[P.READY]]
@@ -373,7 +385,8 @@ def stage_qbo(week_ending, float_name=None, **kwargs):
         frappe.throw(_("There is nothing to send to QuickBooks for this week."))
     doc_number = Q.doc_number(float_name, week_ending)
     journals = sorted({e["journal_entry"] for e in b[P.POSTED] if e.get("journal_entry")})
-    payload = C.build_qbo_payload(groups, Q.QBO_PETTY_CASH, week_ending, doc_number,
+    # Sent one line per entry so each QuickBooks line carries its date, purpose and ETR.
+    payload = C.build_qbo_payload(C.build_qbo_lines(lines, per_entry=True), Q.QBO_PETTY_CASH, week_ending, doc_number,
                                   f"Petty cash {float_name}, week ending {week_ending}. Raised from the petty cash app; "
                                   f"mirrors ERPNext {', '.join(journals)}.")
 

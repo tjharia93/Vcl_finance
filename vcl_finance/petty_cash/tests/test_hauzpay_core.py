@@ -1,0 +1,184 @@
+"""Unit tests for the Hauz Pay statement import's pure logic. No bench needed:
+
+    cd ~/projects/Vcl_finance && python3 -m unittest vcl_finance.petty_cash.tests.test_hauzpay_core -v
+"""
+import importlib.util
+import json
+import pathlib
+import unittest
+from datetime import date
+
+_dir = pathlib.Path(__file__).resolve().parents[1]
+_spec = importlib.util.spec_from_file_location("hauzpay_core", _dir / "hauzpay_core.py")
+C = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(C)
+RULES = json.loads((_dir / "hauzpay_rules.json").read_text())
+
+HEAD = ("Date + Time", "Transaction ID", "Payment Method", "Payee", "name", "Narration",
+        "Money In (KES)", "Money Out (KES)", "Running Balance (KES)", "eTIMS",
+        "Expense Category", "Raised By", "Approved By")
+ROSTER_PHONE = "+254721519206"     # JOHN MUCHOKI in hauzpay_rules.json
+
+
+def stmt(lines, opening="1000.00", closing=None):
+    """Rows as openpyxl gives them for the Oct-2026 export: strings, 13 columns."""
+    rows = [("PERIOD", "03/10/2026 21:00:00 - 10/10/2026 20:59:59") + ("",) * 11,
+            ("OPENING BALANCE", opening) + ("",) * 11]
+    bal = float(opening)
+    body = []
+    for dt, txid, payee, name, narr, mi, mo in lines:
+        bal += float(mi or 0) - float(mo or 0)
+        body.append((dt, txid, "PHONE", payee, name, narr, mi, mo, f"{bal:.2f}", "Non-eTIMS", "", "T", "T"))
+    rows.append(("CLOSING BALANCE", closing if closing is not None else f"{bal:.2f}") + ("",) * 11)
+    rows.append(HEAD)
+    return rows + body
+
+
+WEEK = [
+    ("04/10/2026 09:00:00", "TOPUP1", "", "Bank", "deposit", "50000.00", ""),
+    ("06/10/2026 10:00:00", "UJ6WAGE1", ROSTER_PHONE, "JOHN MUCHOKI", "Labour", "", "4753.00"),
+    ("06/10/2026 10:00:00", "c-1", ROSTER_PHONE, "JOHN MUCHOKI", "Transaction Charges", "", "40.00"),
+    ("07/10/2026 11:00:00", "UJ7ODD1", "Hubtech", "HUBTECH LIMITED.", "Payment", "", "19816.00"),
+    ("07/10/2026 11:00:00", "c-2", "Hubtech", "HUBTECH LIMITED.", "Transaction Charges", "", "91.00"),
+    ("08/10/2026 12:00:00", "UJ8KW1", "833301", "Simron", "Balance for Miller Welding", "", "11040.00"),
+]
+
+
+class Helpers(unittest.TestCase):
+    def test_week_is_sun_to_sat_anchored_saturday(self):
+        self.assertEqual(C.week_saturday(date(2026, 10, 4)), date(2026, 10, 10))   # Sunday opens
+        self.assertEqual(C.week_saturday(date(2026, 10, 10)), date(2026, 10, 10))  # Saturday ends
+        self.assertEqual(C.week_saturday(date(2026, 10, 11)), date(2026, 10, 17))
+
+    def test_phone_key_agrees_across_spellings(self):
+        for v in ("+254721519206", "254721519206", "0721519206", "+254 721 519 206"):
+            self.assertEqual(C.phone_key(v), "721519206")
+        self.assertEqual(C.phone_key("833301"), "")
+        self.assertEqual(C.phone_key("1020260001282156"), "")
+
+    def test_money_reads_strings_commas_and_blanks(self):
+        self.assertEqual(C.money("19,816.00"), 19816.0)
+        self.assertEqual(C.money(""), 0.0)
+        self.assertEqual(C.money(None), 0.0)
+        self.assertEqual(C.money(55), 55.0)
+
+
+class Parse(unittest.TestCase):
+    def test_reads_meta_header_and_lines(self):
+        p = C.parse_rows(stmt(WEEK))
+        self.assertEqual(p["opening"], 1000.0)
+        self.assertEqual(len(p["lines"]), 6)
+        self.assertEqual(p["lines"][2]["is_charge"], True)
+        self.assertEqual(p["lines"][0]["date"], date(2026, 10, 4))
+        self.assertEqual(p["lines"][0]["row"], 5)            # rows 1-3 meta, 4 header, 5 first txn
+
+    def test_columns_are_found_by_name_not_position(self):
+        rows = stmt(WEEK)
+        # Swap two columns in header and body: still parses the same.
+        sw = lambda r: (r[0], r[2], r[1]) + tuple(r[3:]) if len(r) > 3 else r
+        p = C.parse_rows([sw(r) for r in rows])
+        self.assertEqual(p["lines"][1]["txid"], "UJ6WAGE1")
+
+    def test_june_headerless_layout(self):
+        rows = [("19/06/2026 11:40:57", "UFJ1", "PHONE", ROSTER_PHONE, "JOHN", "X0X", "", "4753.00", "1.00", "T", "T")]
+        p = C.parse_rows(rows)
+        self.assertEqual(len(p["lines"]), 1)
+        self.assertIsNone(p["opening"])
+        self.assertTrue(p["warnings"])
+
+    def test_not_a_statement(self):
+        with self.assertRaises(ValueError):
+            C.parse_rows([("Foo", "Transaction ID", "Bar")])
+
+    def test_balance_check_ties_and_reports_difference(self):
+        ok = C.balance_check(C.parse_rows(stmt(WEEK)))
+        self.assertTrue(ok["ok"])
+        self.assertEqual(ok["difference"], 0.0)
+        bad = C.balance_check(C.parse_rows(stmt(WEEK, closing="999999.00")))
+        self.assertFalse(bad["ok"])
+        self.assertNotEqual(bad["difference"], 0.0)
+
+
+class Classify(unittest.TestCase):
+    def setUp(self):
+        self.p = C.parse_rows(stmt(WEEK))
+        self.roster = C.build_roster(RULES)
+
+    def route(self, i):
+        return C.classify(self.p["lines"][i], RULES, self.roster)
+
+    def test_routes(self):
+        self.assertEqual(self.route(0)["route"], C.CASH_IN)
+        w = self.route(1)
+        self.assertEqual((w["route"], w["kind"]), (C.WAGE, "wage"))
+        self.assertEqual(w["recipient"], "254721519206 - JOHN MUCHOKI")
+        self.assertEqual(self.route(2)["route"], C.CHARGE)
+        f = self.route(3)
+        self.assertEqual((f["route"], f["category"]), (C.FLAGGED, "OT"))
+        k = self.route(5)
+        self.assertEqual((k["route"], k["category"]), (C.VOUCHER, "SE"))
+
+    def test_learned_roster_routes_wage_but_rules_win_on_name(self):
+        roster = C.build_roster(RULES, {"254799000111": "NEW CASUAL", "254721519206": "OTHER NAME"})
+        line = dict(self.p["lines"][1], payee="0799000111")
+        c = C.classify(line, RULES, roster)
+        self.assertEqual((c["route"], c["why"]), (C.WAGE, "Paid as a wage before"))
+        self.assertIn("JOHN MUCHOKI", C.classify(self.p["lines"][1], RULES, roster)["recipient"])
+
+
+class Plan(unittest.TestCase):
+    def test_new_week_counts_and_charges_lumped(self):
+        pl = C.plan(C.parse_rows(stmt(WEEK)), RULES, {})
+        self.assertEqual(len(pl["weeks"]), 1)
+        w = pl["weeks"][0]
+        self.assertEqual((w["week_ending"], w["action"]), ("2026-10-10", "create"))
+        self.assertEqual(w["counts"]["new"], 6)
+        self.assertEqual(w["charges"], {"amount": 131.0, "refs": ["c-1", "c-2"], "count": 2, "skipped": 0})
+        self.assertEqual(w["flagged"], 1)
+        self.assertEqual(pl["totals"][C.FLAGGED], 1)
+        self.assertEqual(w["statement_opening"], 1000.0)
+
+    def test_known_txid_is_never_imported_twice(self):
+        pl = C.plan(C.parse_rows(stmt(WEEK)), RULES, {}, known_refs={"UJ6WAGE1": "PCS-1", "c-1": "PCS-1"})
+        states = {l["txid"]: l["state"] for l in pl["weeks"][0]["lines"]}
+        self.assertEqual(states["UJ6WAGE1"], "duplicate")
+        self.assertEqual(states["c-1"], "duplicate")
+        self.assertEqual(pl["weeks"][0]["charges"]["amount"], 91.0)
+
+    def test_locked_week_is_skipped(self):
+        sheets = {date(2026, 10, 10): {"name": "PCS-9", "status": "Approved", "opening_balance": 1000, "rows": []}}
+        w = C.plan(C.parse_rows(stmt(WEEK)), RULES, sheets)["weeks"][0]
+        self.assertEqual(w["action"], "skip")
+        self.assertEqual(w["counts"]["skipped_locked"], 6)
+        self.assertEqual(w["charges"]["amount"], 0)
+
+    def test_legacy_rows_without_ids_match_by_date_amount_phone(self):
+        # Two 4,753 wages on the same day; the sheet already has ONE (back-filled, no id).
+        lines = WEEK[:2] + [("06/10/2026 10:05:00", "UJ6WAGE2", "+254729355273", "JOHN OWITI", "Labour", "", "4753.00")]
+        rows = [{"date": date(2026, 10, 6), "amount": 4753.0, "cash_in": False, "phone": "729355273",
+                 "src_ref": None, "label": "254729355273 - OWITI"},
+                {"date": date(2026, 10, 4), "amount": 50000.0, "cash_in": True, "phone": "", "src_ref": None}]
+        sheets = {date(2026, 10, 10): {"name": "PCS-9", "status": "Draft", "opening_balance": 900, "rows": rows}}
+        w = C.plan(C.parse_rows(stmt(lines)), RULES, sheets)["weeks"][0]
+        st = {l["txid"]: l["state"] for l in w["lines"]}
+        self.assertEqual(st, {"TOPUP1": "on_sheet", "UJ6WAGE1": "new", "UJ6WAGE2": "on_sheet"})
+        self.assertEqual(w["action"], "use")
+        self.assertEqual(w["opening_difference"], -100.0)
+
+    def test_legacy_charges_row_blocks_charges(self):
+        rows = [{"date": date(2026, 10, 10), "amount": 500.0, "cash_in": False, "phone": "",
+                 "is_charges": True, "src_ref": None}]
+        sheets = {date(2026, 10, 10): {"name": "PCS-9", "status": "Draft", "opening_balance": 1000, "rows": rows}}
+        w = C.plan(C.parse_rows(stmt(WEEK)), RULES, sheets)["weeks"][0]
+        self.assertEqual(w["charges"]["amount"], 0)
+        self.assertEqual(w["charges"]["skipped"], 2)
+
+    def test_multi_week_carries_running_opening(self):
+        lines = WEEK[:2] + [("12/10/2026 08:00:00", "NEXT1", ROSTER_PHONE, "JOHN", "Labour", "", "100.00")]
+        pl = C.plan(C.parse_rows(stmt(lines)), RULES, {})
+        self.assertEqual([w["week_ending"] for w in pl["weeks"]], ["2026-10-10", "2026-10-17"])
+        self.assertEqual(pl["weeks"][1]["statement_opening"], 1000 + 50000 - 4753)
+
+
+if __name__ == "__main__":
+    unittest.main()

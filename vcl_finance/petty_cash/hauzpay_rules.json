@@ -1,0 +1,37 @@
+{
+  "_doc": "Hauz-Pay weekly import rules. roster = M-Pesa phone -> staff name (routed to the Wages register as casual wage). known_payees = phone -> {cat,label} for recurring non-wage payments auto-categorised to a voucher column. Everything else lands as a voucher in 'OT' (Other) and is FLAGGED for Tanuj to categorise in the editor. Cats: TG TE SE OA FD GP OT.",
+  "roster": {
+    "+254721519206": "JOHN MUCHOKI",
+    "+254729355273": "JOHN OWITI",
+    "+254727038759": "PETER AMBATA",
+    "+254113905867": "KELVIN NDAMBUKI",
+    "+254724350381": "ONESMUS KILU",
+    "+254712278373": "NICHOLAS MUTILI",
+    "+254768156120": "GLORIA MAKAU",
+    "+254768156210": "GLORIA MAKAU",
+    "+254718385582": "GEOFFREY OKEMWA",
+    "+254798075292": "DANIEL OMWEGA",
+    "+254769169287": "DENNIS MATUKU",
+    "+254719358746": "COLLINS WAMAWA",
+    "+254724427533": "RICHARD NZIOKA",
+    "+254724752268": "JOSHPAT MUSAU",
+    "+254728483807": "RICHARD MWOLO",
+    "+254706778525": "PAUL VUJENGO",
+    "+254769685203": "KENNEDY OTIENO",
+    "+254715606431": "LEONARD MWANZIA",
+    "+254726836532": "NELSON MUTOKA",
+    "+254712996579": "FRANKLIN ODHIAMBO",
+    "+254791198987": "ERIC NGUMA",
+    "+254729094518": "JOHN MULWA"
+  },
+  "known_payees": {
+    "+254725266301": {"cat": "SE", "label": "Kennedy Wafula (Ashok / vehicle service)"}
+  },
+  "_keyword_doc": "Matched (case-insensitive substring) against narration + name + payee for payments whose phone isn't in roster/known_payees. First match wins; checked before the flag-as-Other fallback. Use for payees whose category is fixed by what's bought, not who's paid (e.g. Tony Oyoda's phone covers both UCR=Other and TREO=unknown).",
+  "keyword_rules": [
+    {"match": "miller welding", "cat": "SE", "label": "Miller Welding (spares / engineering)"},
+    {"match": "electric switch", "cat": "SE", "label": "Electric switch / socket (spares)"},
+    {"match": "ucr", "cat": "OT", "label": "UCR / copyright association fees"},
+    {"match": "treo", "cat": "OT", "label": "TREO (other)"}
+  ]
+}

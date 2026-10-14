@@ -26,7 +26,8 @@
   "locked_on",
   "reconciled",
   "reconciled_by",
-  "reconciled_on"
+  "reconciled_on",
+  "src_ref"
  ],
  "fields": [
   {"fieldname": "row_idx", "fieldtype": "Int", "label": "Row", "in_list_view": 1, "columns": 1, "read_only": 1},
@@ -50,11 +51,12 @@
   {"fieldname": "locked_on", "fieldtype": "Datetime", "label": "Locked On", "read_only": 1},
   {"fieldname": "reconciled", "fieldtype": "Check", "label": "Reconciled by Finance", "default": "0", "description": "Finance has checked this row against the custodian's paper sheet. Comes AFTER the approval tick, and only an Accounts Manager can set or clear it."},
   {"fieldname": "reconciled_by", "fieldtype": "Data", "label": "Reconciled By", "read_only": 1},
-  {"fieldname": "reconciled_on", "fieldtype": "Datetime", "label": "Reconciled On", "read_only": 1}
+  {"fieldname": "reconciled_on", "fieldtype": "Datetime", "label": "Reconciled On", "read_only": 1},
+  {"fieldname": "src_ref", "fieldtype": "Small Text", "label": "Statement Ref", "read_only": 1, "no_copy": 1, "description": "Hauz Pay transaction id(s) this row was imported from. Set by the statement import; an id found here is never imported again."}
  ],
  "istable": 1,
  "links": [],
- "modified": "2026-07-09 00:00:00",
+ "modified": "2026-10-14 12:00:00",
  "modified_by": "Administrator",
  "module": "Petty Cash",
  "name": "Petty Cash Voucher",

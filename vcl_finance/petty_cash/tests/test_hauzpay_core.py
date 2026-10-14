@@ -163,6 +163,25 @@ class TopUps(unittest.TestCase):
         self.assertEqual((pl["totals"]["needs_bank"], pl["weeks"][0]["needs_bank"]), (1, 1))
 
 
+class Suggestions(unittest.TestCase):
+    """Nothing is decided by the import: every route, category and bank is worded as a
+    suggestion for the reviewer (Tanuj, 14/10/2026)."""
+    def test_every_new_line_carries_a_suggestion(self):
+        rows = stmt(WEEK + [("09/10/2026 09:00:00", "FT26282M088D", "+254728824856", "VIMIT CONVERTERS LTD Coop Bank",
+                             "KVN0002", "200000.00", "")])
+        lines = {l["txid"]: l["suggestion"] for l in C.plan(C.parse_rows(rows), RULES, {})["weeks"][0]["lines"]}
+        self.assertEqual(lines["FT26282M088D"], "Suggested: Cr Co-OP - VCL (Co-op Bank)")
+        self.assertTrue(lines["TOPUP1"].startswith("No bank suggested"))
+        self.assertEqual(lines["UJ6WAGE1"], "Suggested: wage (Staff roster)")
+        self.assertEqual(lines["UJ7ODD1"], "Suggested: OT (unknown payee, pick a category)")
+        self.assertEqual(lines["UJ8KW1"], "Suggested: SE (Keyword 'miller welding')")
+        self.assertEqual(lines["c-1"], "Suggested: OT (transaction charges)")
+
+    def test_a_topup_suggestion_never_names_a_bank_it_did_not_find(self):
+        c = C.classify_topup(dict(method="bank_ipn", name="", narration="FT1", payee=""), RULES)
+        self.assertNotIn("Cr ", C.suggestion(c))
+
+
 class Plan(unittest.TestCase):
     def test_new_week_counts_and_charges_lumped(self):
         pl = C.plan(C.parse_rows(stmt(WEEK)), RULES, {})

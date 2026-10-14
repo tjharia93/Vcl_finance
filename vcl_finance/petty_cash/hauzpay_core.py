@@ -14,6 +14,11 @@ hauzpay_import.py``, retired). The routing convention is unchanged from June 202
   * anything else                        -> Voucher, OT, FLAGGED for review
   * every "Transaction Charges" row      -> ONE combined OT voucher per week
 
+Every route, category and bank here is a SUGGESTION (Tanuj, 14/10/2026): nothing is
+decided automatically. The import writes each line Unapproved with the suggestion in
+its notes (``suggestion``), and the reviewer accepts or changes it on the normal
+approval screen, exactly as for a line the custodian keyed by hand.
+
 What changed from Gen-1:
 
 * The week is the Sun-Sat week anchored on SATURDAY (``week_saturday``, the same rule
@@ -244,8 +249,9 @@ def topup_bank(line: dict, rules: dict):
 
 def classify_topup(line: dict, rules: dict) -> dict:
     """Money IN = a top-up of the wallet. It posts to ERPNext (Dr Hauz-Pay Wallet,
-    Cr the bank it came from) and never to QuickBooks. The bank is the line's posting
-    account; when the statement does not say which bank, the line is flagged "bank?"."""
+    Cr the bank it came from) and never to QuickBooks. The bank found here is only a
+    suggestion for the reviewer; when the statement does not say which bank, the line
+    is flagged "bank?"."""
     source = TOPUP_SOURCES.get(line["method"].lower(), line["method"] or "Deposit")
     bank = topup_bank(line, rules)
     who = bank["label"] if bank and bank.get("label") else (line["name"] or "")
@@ -295,6 +301,27 @@ def classify(line: dict, rules: dict, roster: dict) -> dict:
         who = f"{line['payee']} - {who}"
     return {"route": FLAGGED, "kind": "voucher", "category": "OT", "recipient": who,
             "reason": "", "why": "Unknown payee — pick a category"}
+
+
+def suggestion(c: dict) -> str:
+    """The classification as the words the reviewer reads in the line's notes.
+
+    Always "Suggested: ..." (or says there is no suggestion): the import proposes, the
+    approval screen decides. A top-up's bank in particular is NEVER written as the
+    line's ``posting_account`` - that field is a human decision and beats the map.
+    """
+    route = c["route"]
+    if route == CASH_IN:
+        if c.get("bank_account"):
+            return f"Suggested: Cr {c['bank_account']} ({c.get('bank_label') or 'from the rules'})"
+        return "No bank suggested: the statement does not say which bank. Pick it on approval"
+    if route == WAGE:
+        return f"Suggested: wage ({c['why']})"
+    if route == FLAGGED:
+        return f"Suggested: {c['category']} (unknown payee, pick a category)"
+    if route == CHARGE:
+        return f"Suggested: {c['category']} (transaction charges)"
+    return f"Suggested: {c['category']} ({c['why']})"
 
 
 # ------------------------------------------------------------------ plan
@@ -347,7 +374,8 @@ def plan(parsed: dict, rules: dict, sheets: dict, learned_roster: dict | None = 
             item = {"row": l["row"], "date": l["date"].isoformat(), "txid": l["txid"],
                     "payee": l["payee"], "name": l["name"], "narration": l["narration"],
                     "expense_category": l["expense_category"], "amount": amount,
-                    "direction": "in" if l["money_in"] else "out", **c, "state": "new", "note": ""}
+                    "direction": "in" if l["money_in"] else "out", **c,
+                    "suggestion": suggestion(c), "state": "new", "note": ""}
             if l["txid"] and l["txid"] in known_refs:
                 item["state"], item["note"] = "duplicate", f"Already imported ({known_refs[l['txid']]})"
             elif locked:

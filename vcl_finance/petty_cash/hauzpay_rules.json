@@ -27,7 +27,7 @@
   "known_payees": {
     "+254725266301": {"cat": "SE", "label": "Kennedy Wafula (Ashok / vehicle service)"}
   },
-  "_topup_banks_doc": "Money IN rows are wallet top-ups: posted to ERPNext only (Dr Hauz-Pay Wallet - VCL, Cr the bank), never to QuickBooks. Each rule maps a pattern (case-insensitive substring of the statement's name + narration + payee + method; a string or a list) to the ERPNext BANK account credited. First match wins. No match = the line is flagged 'bank?' for Tanuj to pick. Account must be a live account_type=Bank account of Vimit Converters Limited or the import treats it as no match.",
+  "_topup_banks_doc": "Money IN rows are wallet top-ups: posted to ERPNext only (Dr Hauz-Pay Wallet - VCL, Cr the bank), never to QuickBooks. Each rule maps a pattern (case-insensitive substring of the statement's name + narration + payee + method; a string or a list) to the ERPNext BANK account to SUGGEST as the credit: it is written into the line's notes as 'Suggested: Cr <account>' and the reviewer picks the account on approval (set_line_account); the import never sets it. First match wins. No match = the line is flagged 'bank?' for Tanuj to pick. Account must be a live account_type=Bank account of Vimit Converters Limited or the import treats it as no match.",
   "topup_banks": [
     {"match": ["coop bank", "co-op bank", "co-operative bank", "cooperative bank"], "account": "Co-OP - VCL", "label": "Co-op Bank"},
     {"match": ["bank of baroda", "baroda"], "account": "95900400000115 - BOB Kshs - VCL", "label": "Bank of Baroda (KES)"},

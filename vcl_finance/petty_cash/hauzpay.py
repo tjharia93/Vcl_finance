@@ -11,6 +11,15 @@ and calls:
 
 Nothing here posts to ERPNext or QuickBooks; posting stays with ``weekpost``.
 
+NOTHING IS DECIDED HERE (Tanuj, 14/10/2026). The route, category and bank the rules
+find are SUGGESTIONS, written into the row's notes as "Suggested: ..." for the reviewer
+to accept or change on the normal approval screen, the same review as for a line the
+custodian keys by hand. The import never locks a row (the lock IS the approval), never
+sets a ``Petty Cash Entry``'s ``posting_account`` (a line-level account is a human
+decision: it beats the Posting Map in ``post._classify``), and never posts or stages
+anything. ``_assert_nothing_decided`` checks that on every write and rolls the whole
+import back if a mirrored entry comes out anything but Unapproved and undecided.
+
 Every imported row carries its Hauz Pay transaction id in ``src_ref`` (the one lumped
 charges row per week carries ``HZP-CHARGES`` plus the id of every charge folded into
 it). An id found on ANY Hauz-Pay sheet, cancelled rows included, is never imported
@@ -174,9 +183,9 @@ def _build_plan(file_url):
 
 
 def _check_banks(p):
-    """A top-up's bank comes from the rules file; only a LIVE, enabled Bank account of
-    the company counts. Anything else is treated as "bank?" rather than posted to a
-    name that does not exist."""
+    """A top-up's suggested bank comes from the rules file; only a LIVE, enabled Bank
+    account of the company counts. Anything else is treated as "bank?" rather than
+    suggesting a name that does not exist."""
     live = set(frappe.get_all("Account", filters={"account_type": "Bank", "company": COMPANY,
                                                    "is_group": 0, "disabled": 0}, pluck="name"))
     p["bank_accounts"] = sorted(live)
@@ -187,6 +196,7 @@ def _check_banks(p):
                 continue
             l["bank_account"], l["needs_bank"] = None, True
             l["why"] = f"bank? — the rules name {acct}, which is not a live bank account"
+            l["suggestion"] = C.suggestion(l)
             p.setdefault("warnings", []).append(
                 f"hauzpay_rules.json maps a top-up to '{acct}', which is not an enabled Bank account.")
         w["needs_bank"] = sum(1 for l in w["lines"] if l["state"] == "new" and l.get("needs_bank"))
@@ -260,31 +270,47 @@ def import_statement(file_url, week_ending=None):
     totals = {k: sum(d.get(k) or 0 for d in done)
               for k in ("vouchers", "wages", "charges", "flagged", "skipped", "topups", "topups_amount", "needs_bank")}
     warnings = [w for d in done for w in (d.get("warnings") or [])]
+    totals["unapproved"] = sum(d.get("unapproved") or 0 for d in done)
+    totals["posted"] = 0
     return {"weeks": done, "totals": totals, "balance": p["balance"], "warnings": warnings}
 
 
-def _stamp_topup(row, l, out):
-    """Give the top-up's mirrored Petty Cash Entry its contra: ``posting_account`` = the
-    bank. ``post._classify`` takes a line's own posting_account before the map, and for a
-    cash-in line that account is the CREDIT side, the float's cash account the debit:
-    Dr Hauz-Pay Wallet - VCL, Cr <bank>. QuickBooks never takes a cash-in line.
+def _assert_nothing_decided(fresh, reused=()):
+    """Every entry the import's rows mirror into must still be waiting for a person.
+
+    ``fresh``: child rows this import filled or added. Their entries must be Unapproved,
+    with no posting_account, journal or QuickBooks queue row - anything else means
+    something decided on the reviewer's behalf, and the whole import is rolled back.
+    ``reused``: the week's existing lumped-charges row, topped up with new charges. It
+    is unlocked (a locked one is never reused), so it cannot be Approved; a reviewer may
+    already have Withdrawn it or picked its account, which the import leaves alone.
 
     The mirror runs synchronously on the sheet save but swallows its own errors, so a
-    missing entry is reported, never assumed."""
-    out["topups"] += 1
-    out["topups_amount"] = round(out["topups_amount"] + flt(l["amount"]), 2)
-    name = frappe.db.get_value("Petty Cash Entry", {"origin_row": row.name, "origin_doctype": "Petty Cash Voucher"}, "name")
-    if not l.get("bank_account"):
-        out["needs_bank"] += 1
-        return
-    if not name:
-        out["warnings"].append(f"Top-up {l['txid']}: no Petty Cash Entry was mirrored, so its bank "
-                               f"({l['bank_account']}) is only in the sheet row's notes.")
-        return
-    reason = (f"Hauz Pay top-up from {l.get('bank_label') or l['bank_account']} "
-              f"({l.get('source') or 'deposit'}, {l['txid']}). {ERP_ONLY}.")
-    frappe.db.set_value("Petty Cash Entry", name, {"posting_account": l["bank_account"],
-                                                   "override_reason": reason}, update_modified=False)
+    row with no entry is reported as a warning, never assumed. Returns
+    (fresh rows whose entry is waiting Unapproved, warnings)."""
+    rows = [r for r in list(fresh) + list(reused) if r.name]
+    if not rows:
+        return 0, []
+    ents = {e.origin_row: e for e in frappe.get_all(
+        "Petty Cash Entry",
+        filters={"origin_row": ("in", [r.name for r in rows]), "sync_state": "Mirrored"},
+        fields=["name", "origin_row", "status", "posting_account", "journal_entry", "qbo_queue"])}
+    bad, warnings = [], []
+    reused_names = {r.name for r in reused}
+    for r in rows:
+        e = ents.get(r.name)
+        if not e:
+            warnings.append(f"Row {r.idx} ({r.src_ref or r.name}) has no Petty Cash Entry yet; "
+                            "it shows in the approval queue once the sheet is next saved.")
+        elif r.name in reused_names:
+            if e.status == "Approved" or e.journal_entry:
+                bad.append(e.name)
+        elif e.status != "Unapproved" or e.posting_account or e.journal_entry or e.qbo_queue:
+            bad.append(e.name)
+    if bad:
+        frappe.throw(_("The import would have left {0} approved, posted or with an account "
+                       "chosen. Nothing was imported.").format(", ".join(bad)))
+    return sum(1 for r in fresh if r.name in ents), warnings
 
 
 def _write_week(wk, new, custodian):
@@ -305,15 +331,17 @@ def _write_week(wk, new, custodian):
     vouchers = sorted(doc.vouchers, key=lambda x: x.row_idx or 0)
     wages = sorted(doc.wages_entries, key=lambda x: x.row_idx or 0)
 
+    # Never a locked row (``_first_blank`` skips them: the lock IS the approval) and
+    # never a voided blank, or the imported line would land Approved or Void.
     def voucher_row():
-        r = _first_blank(vouchers, lambda v: not _voucher_has_data(v))
+        r = _first_blank(vouchers, lambda v: not _voucher_has_data(v) and not v.cancelled)
         if r is None:
             r = doc.append("vouchers", {"row_idx": _next_idx(doc.vouchers)})
             vouchers.append(r)
         return r
 
     def wage_row():
-        r = _first_blank(wages, lambda w: not (w.recipient or "").strip() and not flt(w.amount)
+        r = _first_blank(wages, lambda w: not w.cancelled and not (w.recipient or "").strip() and not flt(w.amount)
                          and not w.txn_date and not (w.reason or "").strip() and not (w.staff_id or "").strip())
         if r is None:
             r = doc.append("wages_entries", {"row_idx": _next_idx(doc.wages_entries)})
@@ -322,7 +350,7 @@ def _write_week(wk, new, custodian):
 
     out = {"vouchers": 0, "wages": 0, "charges": 0, "charges_amount": 0.0, "flagged": 0,
            "topups": 0, "topups_amount": 0.0, "needs_bank": 0, "warnings": []}
-    topups = []
+    fresh, reused = [], []
     charges = [l for l in new if l["route"] == C.CHARGE]
     for l in new:
         if l["route"] == C.CHARGE:
@@ -330,21 +358,28 @@ def _write_week(wk, new, custodian):
         d = getdate(l["date"])
         if l["kind"] == "wage":
             r = wage_row()
+            # A wages row has no notes; the suggestion leads its reason so it survives the 140 cut.
             r.txn_date, r.entry_type, r.recipient = d, "Wage", l["recipient"][:140]
-            r.reason, r.amount, r.src_ref = (l["reason"] or "")[:140], l["amount"], l["txid"]
+            r.reason = " · ".join([l["suggestion"], l["reason"] or ""]).strip(" ·")[:140]
+            r.amount, r.src_ref = l["amount"], l["txid"]
+            fresh.append(r)
             out["wages"] += 1
             continue
         r = voucher_row()
-        notes = [l["narration"]] if l["narration"] else []
+        notes = [l["suggestion"]]
+        if l["narration"]:
+            notes.append(l["narration"])
         if l["expense_category"]:
             notes.append("Hauz Pay category: " + l["expense_category"])
         if l["route"] == C.FLAGGED:
-            notes.insert(0, "FLAG: needs category")
             out["flagged"] += 1
         if l["route"] == C.CASH_IN:
             notes = [f"Top-up · {ERP_ONLY}", f"{l.get('source') or ''} ({l['payee'] or l['name'] or 'no payee'})"] + notes
-            notes.append(f"Cr {l['bank_account']}" if l.get("bank_account") else "bank? — pick the bank before posting")
-            topups.append((r, l))
+            out["topups"] += 1
+            out["topups_amount"] = round(out["topups_amount"] + flt(l["amount"]), 2)
+            if not l.get("bank_account"):
+                out["needs_bank"] += 1
+        fresh.append(r)
         r.txn_date, r.recipient, r.amount = d, l["recipient"][:140], l["amount"]
         r.voucher_no = (l["txid"] or "")[:20]
         r.cash_in = 1 if l["route"] == C.CASH_IN else 0
@@ -363,15 +398,19 @@ def _write_week(wk, new, custodian):
             row = voucher_row()
             row.recipient, row.category, row.cash_in, row.amount = "Hauz Pay transaction charges", "OT", 0, 0
             row.voucher_no, row.src_ref = "CHARGES", C.CHARGES_REF
+            fresh.append(row)
+        else:
+            reused.append(row)
         row.amount = round(flt(row.amount) + amt, 2)
         row.txn_date = max(getdate(row.txn_date), last) if row.txn_date else last
         row.src_ref = "\n".join([row.src_ref] + refs)
         n = len([t for t in row.src_ref.split("\n")[1:] if t])
-        row.notes = f"Lumped Hauz Pay transaction charges for the week ({n} charges)"
+        row.notes = (f"{C.suggestion(charges[0])} · "
+                     f"Lumped Hauz Pay transaction charges for the week ({n} charges)")
         out["charges"], out["charges_amount"] = len(charges), amt
 
     doc.save()
-    for r, l in topups:
-        _stamp_topup(r, l, out)
+    out["unapproved"], missing = _assert_nothing_decided(fresh, reused)
+    out["warnings"].extend(missing)
     out.update({"sheet": doc.name, "created": created, "summary": _summary(doc)})
     return out

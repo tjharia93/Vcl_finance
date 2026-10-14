@@ -226,6 +226,39 @@ def build_roster(rules: dict, learned: dict | None = None) -> dict:
     return roster
 
 
+TOPUP_SOURCES = {"bank_ipn": "Bank deposit", "mpesa_stk": "M-Pesa STK"}
+
+
+def topup_bank(line: dict, rules: dict):
+    """The bank a top-up came from, from ``rules['topup_banks']`` (narration pattern ->
+    ERPNext bank account). Matched case-insensitively against name, narration, payee
+    and method. Returns the rule dict or None — never a guess."""
+    hay = " ".join(str(line.get(k) or "") for k in ("name", "narration", "payee", "method")).lower()
+    for r in rules.get("topup_banks") or []:
+        pats = r.get("match")
+        for pat in ([pats] if isinstance(pats, str) else (pats or [])):
+            if pat and pat.lower() in hay and r.get("account"):
+                return r
+    return None
+
+
+def classify_topup(line: dict, rules: dict) -> dict:
+    """Money IN = a top-up of the wallet. It posts to ERPNext (Dr Hauz-Pay Wallet,
+    Cr the bank it came from) and never to QuickBooks. The bank is the line's posting
+    account; when the statement does not say which bank, the line is flagged "bank?"."""
+    source = TOPUP_SOURCES.get(line["method"].lower(), line["method"] or "Deposit")
+    bank = topup_bank(line, rules)
+    who = bank["label"] if bank and bank.get("label") else (line["name"] or "")
+    return {"route": CASH_IN, "kind": "voucher", "category": "",
+            "recipient": "Hauz Pay top-up" + (f" · {who}" if who else ""),
+            "reason": "", "source": source,
+            "bank_account": bank["account"] if bank else None,
+            "bank_label": bank.get("label") if bank else None,
+            "needs_bank": bank is None, "erp_only": True,
+            "why": (f"Top-up from {bank.get('label') or bank['account']}" if bank
+                    else "bank? — the statement does not say which bank; pick it")}
+
+
 def classify(line: dict, rules: dict, roster: dict) -> dict:
     """Decide where ONE non-charge statement line goes. Returns
     ``{route, kind, category, recipient, reason, why}`` — ``kind`` is the sheet table
@@ -234,10 +267,7 @@ def classify(line: dict, rules: dict, roster: dict) -> dict:
         return {"route": CHARGE, "kind": "voucher", "category": "OT",
                 "recipient": "Hauz Pay transaction charges", "reason": "", "why": "Transaction charge"}
     if line["money_in"] > 0:
-        label = {"mpesa_stk": "M-Pesa STK deposit", "bank_ipn": "Bank deposit"}.get(
-            line["method"].lower(), line["name"] or line["narration"] or "Deposit")
-        return {"route": CASH_IN, "kind": "voucher", "category": "", "recipient": label,
-                "reason": "", "why": "Money in"}
+        return classify_topup(line, rules)
 
     pk = phone_key(line["payee"])
     if pk and pk in roster:
@@ -299,7 +329,7 @@ def plan(parsed: dict, rules: dict, sheets: dict, learned_roster: dict | None = 
     weeks = []
     # Route counts are of NEW lines only; "flagged" is the review queue.
     totals = {"lines": 0, "new": 0, "duplicate": 0, "on_sheet": 0, "skipped_locked": 0,
-              CASH_IN: 0, WAGE: 0, VOUCHER: 0, FLAGGED: 0, CHARGE: 0}
+              CASH_IN: 0, WAGE: 0, VOUCHER: 0, FLAGGED: 0, CHARGE: 0, "needs_bank": 0}
     for we in sorted(by_week):
         sheet = sheets.get(we)
         status = sheet["status"] if sheet else "New"
@@ -355,6 +385,8 @@ def plan(parsed: dict, rules: dict, sheets: dict, learned_roster: dict | None = 
             totals[item["state"]] = totals.get(item["state"], 0) + 1
             if item["state"] == "new":
                 totals[c["route"]] += 1
+                if c.get("needs_bank"):
+                    totals["needs_bank"] += 1
                 if c["route"] == CHARGE:
                     charges_new += amount
                     charges_refs.append(item["txid"])
@@ -374,6 +406,7 @@ def plan(parsed: dict, rules: dict, sheets: dict, learned_roster: dict | None = 
             "counts": {k: sum(1 for x in lines if x["state"] == k)
                        for k in ("new", "duplicate", "on_sheet", "skipped_locked")},
             "flagged": sum(1 for x in lines if x["state"] == "new" and x["route"] == FLAGGED),
+            "needs_bank": sum(1 for x in lines if x["state"] == "new" and x.get("needs_bank")),
             "charges": {"amount": round(charges_new, 2), "refs": charges_refs,
                         "count": len(charges_refs), "skipped": charges_skipped},
             "money_in": w_in, "money_out": w_out,

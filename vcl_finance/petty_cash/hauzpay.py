@@ -42,6 +42,8 @@ from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import (
 )
 
 FLOAT = "Hauz-Pay"
+COMPANY = "Vimit Converters Limited"
+ERP_ONLY = "ERPNext only, not QuickBooks"
 RULES_PATH = os.path.join(os.path.dirname(__file__), "hauzpay_rules.json")
 _PHONE_IN_TEXT = re.compile(r"(?:\+?254|\b0)(\d{9})\b")
 _WAGE_RECIPIENT = re.compile(r"^\s*\+?254(\d{9})\s*-\s*(.+?)\s*$")
@@ -166,8 +168,29 @@ def _build_plan(file_url):
     weeks = {week_saturday(l["date"]) for l in parsed["lines"]}
     sheets, known, learned, custodian = _live_state(weeks)
     p = C.plan(parsed, load_rules(), sheets, learned_roster=learned, known_refs=known)
+    _check_banks(p)
     _predict_openings(p)
     return p, custodian
+
+
+def _check_banks(p):
+    """A top-up's bank comes from the rules file; only a LIVE, enabled Bank account of
+    the company counts. Anything else is treated as "bank?" rather than posted to a
+    name that does not exist."""
+    live = set(frappe.get_all("Account", filters={"account_type": "Bank", "company": COMPANY,
+                                                   "is_group": 0, "disabled": 0}, pluck="name"))
+    p["bank_accounts"] = sorted(live)
+    for w in p["weeks"]:
+        for l in w["lines"]:
+            acct = l.get("bank_account")
+            if l["route"] != C.CASH_IN or not acct or acct in live:
+                continue
+            l["bank_account"], l["needs_bank"] = None, True
+            l["why"] = f"bank? — the rules name {acct}, which is not a live bank account"
+            p.setdefault("warnings", []).append(
+                f"hauzpay_rules.json maps a top-up to '{acct}', which is not an enabled Bank account.")
+        w["needs_bank"] = sum(1 for l in w["lines"] if l["state"] == "new" and l.get("needs_bank"))
+    p["totals"]["needs_bank"] = sum(w["needs_bank"] for w in p["weeks"])
 
 
 def _predict_openings(p):
@@ -234,8 +257,34 @@ def import_statement(file_url, week_ending=None):
         res.update(_write_week(wk, new, custodian))
         done.append(res)
 
-    totals = {k: sum(d.get(k) or 0 for d in done) for k in ("vouchers", "wages", "charges", "flagged", "skipped")}
-    return {"weeks": done, "totals": totals, "balance": p["balance"]}
+    totals = {k: sum(d.get(k) or 0 for d in done)
+              for k in ("vouchers", "wages", "charges", "flagged", "skipped", "topups", "topups_amount", "needs_bank")}
+    warnings = [w for d in done for w in (d.get("warnings") or [])]
+    return {"weeks": done, "totals": totals, "balance": p["balance"], "warnings": warnings}
+
+
+def _stamp_topup(row, l, out):
+    """Give the top-up's mirrored Petty Cash Entry its contra: ``posting_account`` = the
+    bank. ``post._classify`` takes a line's own posting_account before the map, and for a
+    cash-in line that account is the CREDIT side, the float's cash account the debit:
+    Dr Hauz-Pay Wallet - VCL, Cr <bank>. QuickBooks never takes a cash-in line.
+
+    The mirror runs synchronously on the sheet save but swallows its own errors, so a
+    missing entry is reported, never assumed."""
+    out["topups"] += 1
+    out["topups_amount"] = round(out["topups_amount"] + flt(l["amount"]), 2)
+    name = frappe.db.get_value("Petty Cash Entry", {"origin_row": row.name, "origin_doctype": "Petty Cash Voucher"}, "name")
+    if not l.get("bank_account"):
+        out["needs_bank"] += 1
+        return
+    if not name:
+        out["warnings"].append(f"Top-up {l['txid']}: no Petty Cash Entry was mirrored, so its bank "
+                               f"({l['bank_account']}) is only in the sheet row's notes.")
+        return
+    reason = (f"Hauz Pay top-up from {l.get('bank_label') or l['bank_account']} "
+              f"({l.get('source') or 'deposit'}, {l['txid']}). {ERP_ONLY}.")
+    frappe.db.set_value("Petty Cash Entry", name, {"posting_account": l["bank_account"],
+                                                   "override_reason": reason}, update_modified=False)
 
 
 def _write_week(wk, new, custodian):
@@ -271,7 +320,9 @@ def _write_week(wk, new, custodian):
             wages.append(r)
         return r
 
-    out = {"vouchers": 0, "wages": 0, "charges": 0, "charges_amount": 0.0, "flagged": 0}
+    out = {"vouchers": 0, "wages": 0, "charges": 0, "charges_amount": 0.0, "flagged": 0,
+           "topups": 0, "topups_amount": 0.0, "needs_bank": 0, "warnings": []}
+    topups = []
     charges = [l for l in new if l["route"] == C.CHARGE]
     for l in new:
         if l["route"] == C.CHARGE:
@@ -290,6 +341,10 @@ def _write_week(wk, new, custodian):
         if l["route"] == C.FLAGGED:
             notes.insert(0, "FLAG: needs category")
             out["flagged"] += 1
+        if l["route"] == C.CASH_IN:
+            notes = [f"Top-up · {ERP_ONLY}", f"{l.get('source') or ''} ({l['payee'] or l['name'] or 'no payee'})"] + notes
+            notes.append(f"Cr {l['bank_account']}" if l.get("bank_account") else "bank? — pick the bank before posting")
+            topups.append((r, l))
         r.txn_date, r.recipient, r.amount = d, l["recipient"][:140], l["amount"]
         r.voucher_no = (l["txid"] or "")[:20]
         r.cash_in = 1 if l["route"] == C.CASH_IN else 0
@@ -316,5 +371,7 @@ def _write_week(wk, new, custodian):
         out["charges"], out["charges_amount"] = len(charges), amt
 
     doc.save()
+    for r, l in topups:
+        _stamp_topup(r, l, out)
     out.update({"sheet": doc.name, "created": created, "summary": _summary(doc)})
     return out

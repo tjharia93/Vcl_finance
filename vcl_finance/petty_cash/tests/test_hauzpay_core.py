@@ -126,6 +126,43 @@ class Classify(unittest.TestCase):
         self.assertIn("JOHN MUCHOKI", C.classify(self.p["lines"][1], RULES, roster)["recipient"])
 
 
+class TopUps(unittest.TestCase):
+    """Money in = a wallet top-up: ERPNext only, credited to the bank it came from."""
+    def line(self, **kw):
+        base = dict(row=5, date=date(2026, 10, 9), txid="FT26282M088D", method="bank_ipn", payee="+254728824856",
+                    name="VIMIT CONVERTERS LTD Coop Bank", narration="KVN0002", money_in=200000.0, money_out=0.0,
+                    balance=None, expense_category="", is_charge=False)
+        base.update(kw)
+        return base
+
+    def test_coop_deposit_maps_to_coop_bank_account(self):
+        c = C.classify(self.line(), RULES, {})
+        self.assertEqual((c["route"], c["bank_account"], c["needs_bank"], c["erp_only"]),
+                         (C.CASH_IN, "Co-OP - VCL", False, True))
+        self.assertEqual(c["source"], "Bank deposit")
+        self.assertIn("Co-op Bank", c["recipient"])
+
+    def test_no_bank_in_the_text_is_flagged_never_guessed(self):
+        # The June 2026 export: bank_ipn with no name, narration = the bank reference.
+        c = C.classify(self.line(payee="", name="", narration="FT26170P61X6"), RULES, {})
+        self.assertEqual((c["bank_account"], c["needs_bank"]), (None, True))
+        self.assertTrue(c["why"].startswith("bank?"))
+
+    def test_stk_topup_is_flagged_until_a_rule_names_its_account(self):
+        c = C.classify(self.line(method="mpesa_stk", payee="", name="", narration="STK"), RULES, {})
+        self.assertEqual((c["source"], c["needs_bank"]), ("M-Pesa STK", True))
+
+    def test_rule_order_and_list_patterns(self):
+        rules = {"topup_banks": [{"match": ["abc bank"], "account": "ABC BANK - VCL", "label": "ABC"}]}
+        self.assertEqual(C.classify(self.line(name="Deposit from ABC Bank"), rules, {})["bank_account"], "ABC BANK - VCL")
+        self.assertIsNone(C.classify(self.line(), rules, {})["bank_account"])
+
+    def test_plan_counts_lines_needing_a_bank(self):
+        rows = stmt([("04/10/2026 09:00:00", "TOPUP1", "", "", "FT1", "50000.00", "")])
+        pl = C.plan(C.parse_rows(rows), RULES, {})
+        self.assertEqual((pl["totals"]["needs_bank"], pl["weeks"][0]["needs_bank"]), (1, 1))
+
+
 class Plan(unittest.TestCase):
     def test_new_week_counts_and_charges_lumped(self):
         pl = C.plan(C.parse_rows(stmt(WEEK)), RULES, {})

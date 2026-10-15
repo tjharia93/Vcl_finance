@@ -6,7 +6,7 @@ import importlib.util
 import json
 import pathlib
 import unittest
-from datetime import date
+from datetime import date, datetime
 
 _dir = pathlib.Path(__file__).resolve().parents[1]
 _spec = importlib.util.spec_from_file_location("hauzpay_core", _dir / "hauzpay_core.py")
@@ -219,7 +219,7 @@ class Plan(unittest.TestCase):
         st = {l["txid"]: l["state"] for l in w["lines"]}
         self.assertEqual(st, {"TOPUP1": "on_sheet", "UJ6WAGE1": "new", "UJ6WAGE2": "on_sheet"})
         self.assertEqual(w["action"], "use")
-        self.assertEqual(w["opening_difference"], -100.0)
+        self.assertEqual(w["opening_difference"], 100.0)     # statement 1,000 - sheet 900
 
     def test_legacy_charges_row_blocks_charges(self):
         rows = [{"date": date(2026, 10, 10), "amount": 500.0, "cash_in": False, "phone": "",
@@ -234,6 +234,61 @@ class Plan(unittest.TestCase):
         pl = C.plan(C.parse_rows(stmt(lines)), RULES, {})
         self.assertEqual([w["week_ending"] for w in pl["weeks"]], ["2026-10-10", "2026-10-17"])
         self.assertEqual(pl["weeks"][1]["statement_opening"], 1000 + 50000 - 4753)
+
+
+
+class Opening(unittest.TestCase):
+    """The statement sets each week's opening (Tanuj, 15/10/2026)."""
+
+    def test_period_start(self):
+        self.assertEqual(C.period_start("03/10/2026 21:00:00 - 10/10/2026 20:59:59"), datetime(2026, 10, 3, 21, 0))
+        self.assertEqual(C.period_start("01/07/2026 00:00:00 - 31/07/2026 23:59:59"), datetime(2026, 7, 1))
+        self.assertIsNone(C.period_start(None))
+        self.assertIsNone(C.period_start("garbage"))
+
+    def test_an_evening_start_covers_the_next_sunday_a_midweek_start_does_not(self):
+        self.assertTrue(C.covers_week_start(datetime(2026, 10, 3, 21), date(2026, 10, 10)))   # Sat 21:00 = Sun 04/10
+        self.assertTrue(C.covers_week_start(datetime(2026, 10, 4), date(2026, 10, 10)))
+        self.assertFalse(C.covers_week_start(datetime(2026, 10, 3, 9), date(2026, 10, 3)))   # Sat morning, week began 27/09
+        self.assertFalse(C.covers_week_start(datetime(2026, 7, 1), date(2026, 7, 4)))         # July export: Wednesday
+        self.assertFalse(C.covers_week_start(None, date(2026, 10, 10)))
+
+    def test_an_open_sheet_is_set_from_the_statement(self):
+        sheets = {date(2026, 10, 10): {"name": "PCS-9", "status": "Draft", "opening_balance": 45656.77, "rows": []}}
+        w = C.plan(C.parse_rows(stmt(WEEK)), RULES, sheets)["weeks"][0]
+        self.assertEqual((w["opening_action"], w["opening_statement"], w["opening_system"], w["opening_difference"]),
+                         ("set", 1000.0, 45656.77, -44656.77))
+        self.assertEqual(w["opening_note"], "Opening set from statement: 1,000.00 "
+                                            "(system carry-forward was 45,656.77, difference -44,656.77)")
+
+    def test_a_closed_sheet_is_flagged_never_changed(self):
+        for st in ("Approved", "Closed", "Submitted"):
+            sheets = {date(2026, 10, 10): {"name": "PCS-9", "status": st, "opening_balance": 900, "rows": []}}
+            w = C.plan(C.parse_rows(stmt(WEEK)), RULES, sheets)["weeks"][0]
+            self.assertEqual(w["opening_action"], "flag")
+            self.assertIn(f"Week is {st}: opening 900.00 not changed. The statement says 1,000.00 (difference 100.00).",
+                          w["opening_note"])
+        sheets[date(2026, 10, 10)]["opening_balance"] = 1000
+        self.assertEqual(C.plan(C.parse_rows(stmt(WEEK)), RULES, sheets)["weeks"][0]["opening_action"], "ok")
+
+    def test_a_statement_starting_midweek_leaves_that_week_and_sets_the_next(self):
+        rows = stmt(WEEK + [("12/10/2026 08:00:00", "NEXT1", ROSTER_PHONE, "JOHN", "Labour", "", "100.00")])
+        rows[0] = ("PERIOD", "07/10/2026 00:00:00 - 12/10/2026 23:59:59") + ("",) * 11
+        sheets = {date(2026, 10, 10): {"name": "PCS-9", "status": "Draft", "opening_balance": 777, "rows": []},
+                  date(2026, 10, 17): {"name": "PCS-10", "status": "Draft", "opening_balance": 777, "rows": []}}
+        w1, w2 = C.plan(C.parse_rows(rows), RULES, sheets)["weeks"]
+        self.assertEqual(w1["opening_action"], "keep")
+        self.assertIn("The statement starts 07/10/2026, after this week began", w1["opening_note"])
+        self.assertEqual((w2["opening_action"], w2["opening_statement"]), ("set", round(1000 + sum(float(l[5] or 0) - float(l[6] or 0) for l in WEEK), 2)))
+
+    def test_no_opening_on_the_statement_changes_nothing(self):
+        w = C.decide_opening({"statement_opening": None, "status": "Draft", "statement_covers_start": True}, 5.0)
+        self.assertEqual(w["opening_action"], "none")
+
+    def test_a_new_sheet_with_no_earlier_sheet(self):
+        w = C.decide_opening({"statement_opening": 1000.0, "status": "New", "statement_covers_start": True}, None)
+        self.assertEqual((w["opening_action"], w["opening_difference"]), ("set", None))
+        self.assertIn("system carry-forward was none (no earlier sheet)", w["opening_note"])
 
 
 if __name__ == "__main__":

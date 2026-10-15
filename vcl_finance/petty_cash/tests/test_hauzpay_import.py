@@ -55,7 +55,7 @@ class DB:
 
 
 STATE = types.SimpleNamespace(sheets={}, entries={}, db=DB(), names=itertools.count(1),
-                              live_banks=["Co-OP - VCL"], tamper=None)
+                              live_banks=["Co-OP - VCL"], tamper=None, known={}, saves=0)
 
 
 def _get_all(doctype, filters=None, fields=None, pluck=None, **kw):
@@ -118,6 +118,7 @@ class Sheet(Row):
         return r
 
     def save(self):
+        STATE.saves += 1
         for table in ("vouchers", "wages_entries"):
             for i, r in enumerate(self[table], 1):
                 r.idx = i
@@ -134,9 +135,11 @@ class Sheet(Row):
                 STATE.entries[r.name] = e
 
 
-def _create_for_week(week_ending, float_name, custodian_name, opening_balance):
+def _create_for_week(week_ending, float_name, custodian_name, opening_balance, carried=45656.77):
+    """As the real one: the opening is the carry-forward when an earlier sheet exists."""
     name = f"PCS-{week_ending.isoformat()}"
     STATE.sheets[name] = Sheet(name=name, week_ending=week_ending, float=float_name, status="Draft",
+                               opening_balance=carried,
                                docstatus=0, company="Vimit Converters Limited", vouchers=[], wages_entries=[])
     return name
 
@@ -187,7 +190,7 @@ LINES = [   # one of every route
 
 
 def statement():
-    rows, bal = [("OPENING BALANCE", "1000.00")], 1000.0
+    rows, bal = [("PERIOD", "03/10/2026 21:00:00 - 10/10/2026 20:59:59"), ("OPENING BALANCE", "1000.00")], 1000.0
     body = []
     for dt, tx, method, payee, name, narr, mi, mo in LINES:
         bal += float(mi or 0) - float(mo or 0)
@@ -197,13 +200,15 @@ def statement():
 
 class ImportDecidesNothing(unittest.TestCase):
     def setUp(self):
-        STATE.sheets.clear(); STATE.entries.clear(); STATE.db.set_value_calls.clear(); STATE.tamper = None
+        STATE.sheets.clear(); STATE.entries.clear(); STATE.db.set_value_calls.clear(); STATE.tamper = None; STATE.saves = 0
         self._mods = {k: sys.modules.get(k) for k in ("frappe", "frappe.utils")}
         sys.modules.update({"frappe": frappe, "frappe.utils": frappe_utils})
         H._read_statement = lambda file_url: statement()
-        H._live_state = lambda weeks: ({we: {"name": n, "status": s.status, "opening_balance": 1000.0, "rows": []}
+        H._live_state = lambda weeks: ({we: {"name": n, "status": s.status, "opening_balance": float(s.opening_balance or 0),
+                                             "rows": []}
                                         for n, s in STATE.sheets.items() for we in weeks if s.week_ending == we},
-                                       {}, {}, "Shiro")
+                                       dict(STATE.known), {}, "Shiro")
+        STATE.known = {}
 
     def tearDown(self):
         for k, v in self._mods.items():
@@ -287,6 +292,72 @@ class ImportDecidesNothing(unittest.TestCase):
         self.assertEqual(STATE.entries["v-chg"].status, "Withdrawn")
         self.assertEqual(STATE.sheets[name].vouchers[0].amount, 50.0)
         self.assertEqual(res["totals"]["unapproved"], 6)
+
+
+
+class StatementSetsTheOpening(ImportDecidesNothing):
+    """Tanuj, 15/10/2026: the statement is the authority for each week's opening."""
+    WE = date(2026, 10, 10)
+
+    def sheet(self, status="Draft", opening=45656.77):
+        name = _create_for_week(self.WE, "Hauz-Pay", "Shiro", 0, carried=opening)
+        STATE.sheets[name].status = status
+        return STATE.sheets[name]
+
+    def test_a_sheet_the_import_creates_opens_at_the_statement(self):
+        res = self.run_import()
+        s = STATE.sheets["PCS-2026-10-10"]
+        self.assertEqual(s.opening_balance, 1000.0)
+        o = res["weeks"][0]["opening"]
+        self.assertEqual((o["action"], o["old"], o["new"], o["difference"]), ("set", 45656.77, 1000.0, -44656.77))
+        self.assertEqual(o["note"], "Opening set from statement: 1,000.00 (system carry-forward was 45,656.77, "
+                                    "difference -44,656.77)")
+
+    def test_an_open_sheet_has_its_opening_replaced_and_the_old_value_recorded(self):
+        s = self.sheet(opening=12345.0)
+        res = self.run_import()
+        self.assertEqual(s.opening_balance, 1000.0)
+        self.assertEqual((res["weeks"][0]["opening"]["old"], res["weeks"][0]["opening"]["new"]), (12345.0, 1000.0))
+
+    def test_a_closed_sheet_keeps_its_opening_and_is_flagged(self):
+        for st in ("Approved", "Closed", "Submitted"):
+            STATE.sheets.clear()
+            s = self.sheet(status=st, opening=900.0)
+            res = self.run_import()
+            self.assertEqual(s.opening_balance, 900.0, st)
+            self.assertEqual(res["weeks"][0]["opening"]["action"], "flag")
+            self.assertTrue(any(f"Week is {st}: opening 900.00 not changed" in w for w in res["warnings"]), res["warnings"])
+
+    def test_a_week_with_nothing_new_still_gets_the_statement_opening(self):
+        s = self.sheet(opening=5.0)
+        STATE.known = {tx: s.name for tx in ("FT26282M088D", "FT26170P61X6", "UJ6WAGE1", "c-1", "UJ7ODD1", "UJ8KW1", "UJ8KP1")}
+        res = self.run_import()
+        self.assertEqual(res["weeks"][0]["vouchers"] + res["weeks"][0]["wages"], 0)
+        self.assertEqual((s.opening_balance, res["weeks"][0]["opening"]["old"]), (1000.0, 5.0))
+        self.assertEqual(STATE.saves, 1)
+
+    def test_a_matching_opening_is_not_saved_again(self):
+        s = self.sheet(opening=1000.0)
+        STATE.known = {tx: s.name for tx in ("FT26282M088D", "FT26170P61X6", "UJ6WAGE1", "c-1", "UJ7ODD1", "UJ8KW1", "UJ8KP1")}
+        self.run_import()
+        self.assertEqual(STATE.saves, 0)
+
+    def test_a_statement_that_starts_midweek_leaves_the_opening(self):
+        s = self.sheet(opening=777.0)
+        stm = statement()
+        stm["period"] = "07/10/2026 00:00:00 - 10/10/2026 23:59:59"
+        H._read_statement = lambda file_url: stm
+        res = self.run_import()
+        self.assertEqual((s.opening_balance, res["weeks"][0]["opening"]["action"]), (777.0, "keep"))
+
+    def test_the_preview_says_what_it_will_do(self):
+        self.sheet(opening=45656.77)
+        w = H.preview_statement("/private/files/hauzpay.xlsx")["weeks"][0]
+        self.assertEqual(w["opening_note"], "Opening set from statement: 1,000.00 (system carry-forward was "
+                                            "45,656.77, difference -44,656.77)")
+        STATE.sheets.clear()
+        w = H.preview_statement("/private/files/hauzpay.xlsx")["weeks"][0]      # to be created, no earlier sheet
+        self.assertEqual((w["action"], w["opening_action"]), ("create", "set"))
 
 
 if __name__ == "__main__":

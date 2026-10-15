@@ -33,7 +33,7 @@ What changed from Gen-1:
 from __future__ import annotations
 
 import re
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, time, timedelta
 
 CHARGES_REF = "HZP-CHARGES"          # src_ref prefix of the one lumped-charges row per week
 CHARGE_NARRATION = "transaction charges"
@@ -104,6 +104,82 @@ def parse_date(v) -> date | None:
         except ValueError:
             continue
     raise ValueError(f"Unreadable date {v!r} — expected dd/mm/yyyy.")
+
+
+def period_start(period) -> datetime | None:
+    """When the statement starts, from its PERIOD row ("03/10/2026 21:00:00 - 10/10/2026 20:59:59").
+
+    A start at 20:00 or later counts as the next day: exports for a whole week come out
+    starting the evening before (03/10 21:00 is Sunday 04/10 00:00 in Nairobi), while a
+    statement picked from a date starts at 00:00 that day (July: "01/07/2026 00:00:00")."""
+    m = re.match(r"\s*(\d{1,2}/\d{1,2}/\d{4})(?:\s+(\d{1,2}):(\d{2}))?", period or "")
+    if not m:
+        return None
+    try:
+        d = datetime.strptime(m.group(1), "%d/%m/%Y")
+    except ValueError:
+        return None
+    if m.group(2):
+        d = d.replace(hour=int(m.group(2)), minute=int(m.group(3)))
+    return d
+
+
+def covers_week_start(start: datetime | None, week_ending: date) -> bool:
+    """Does a statement starting at ``start`` cover the whole week ending ``week_ending``
+    from its Sunday? Unknown start = no."""
+    if start is None:
+        return False
+    day = start.date() + (timedelta(days=1) if start.time() >= time(20) else timedelta(0))
+    return day <= week_ending - timedelta(days=6)
+
+
+def _dmy(d) -> str:
+    return d.strftime("%d/%m/%Y") if d else ""
+
+
+def _amt(v) -> str:
+    return f"{float(v):,.2f}"
+
+
+def decide_opening(week: dict, system_opening, starts: datetime | None = None) -> dict:
+    """What the import does to one week's sheet opening. Pure; returns the fields to add to the week.
+
+    THE STATEMENT IS THE AUTHORITY (Tanuj, 15/10/2026), reconciled like a bank statement:
+    a week's opening is the statement's running balance at the start of that week (the
+    first week: the statement's OPENING). It is written on a sheet the import creates or
+    on one that is still open; an Approved / Closed / Submitted sheet is never changed,
+    only flagged.
+
+    One exception the statement itself forces: if it starts AFTER the week's Sunday (the
+    July export starts Wednesday 01/07), its opening is the balance mid-week, not this
+    week's opening, and writing it would be wrong - worse, re-uploading such a file would
+    undo a correct opening set by an earlier statement. That week is left as it is.
+
+    ``system_opening``: what the sheet has now, or for a sheet still to be created the
+    carry-forward ``create_for_week`` will give it (None when there is no earlier sheet).
+    """
+    stmt, sysv = week.get("statement_opening"), system_opening
+    diff = round(stmt - float(sysv), 2) if stmt is not None and sysv is not None else None
+    out = {"opening_statement": stmt, "opening_system": sysv, "opening_difference": diff}
+    sys_txt = _amt(sysv) if sysv is not None else "none (no earlier sheet)"
+    if stmt is None:
+        out.update(opening_action="none",
+                   opening_note="The statement has no opening balance, so the sheet's opening is left as it is.")
+    elif week.get("status") in LOCKED_STATUSES:
+        out.update(opening_action="flag" if diff else "ok",
+                   opening_note=(f"Week is {week['status']}: opening {sys_txt} not changed. The statement says "
+                                 f"{_amt(stmt)} (difference {_amt(diff)})." if diff else
+                                 f"Week is {week['status']}; its opening matches the statement ({_amt(stmt)})."))
+    elif not week.get("statement_covers_start"):
+        out.update(opening_action="keep",
+                   opening_note=(f"The statement starts {_dmy(starts) or 'on an unknown date'}, after this week "
+                                 f"began, so its opening is not this week's. Opening left at {sys_txt}; load the "
+                                 "statement that covers the start of the week to set it."))
+    else:
+        out.update(opening_action="set",
+                   opening_note=(f"Opening set from statement: {_amt(stmt)} (system carry-forward was {sys_txt}"
+                                 + (f", difference {_amt(diff)})" if diff is not None else ")")))
+    return out
 
 
 def phone_key(v) -> str:
@@ -361,6 +437,7 @@ def plan(parsed: dict, rules: dict, sheets: dict, learned_roster: dict | None = 
         if run is not None:
             run += l["money_in"] - l["money_out"]
 
+    starts = period_start(parsed.get("period"))
     weeks = []
     # Route counts are of NEW lines only; "flagged" is the review queue.
     totals = {"lines": 0, "new": 0, "duplicate": 0, "on_sheet": 0, "skipped_locked": 0,
@@ -448,11 +525,14 @@ def plan(parsed: dict, rules: dict, sheets: dict, learned_roster: dict | None = 
             "money_in": w_in, "money_out": w_out,
             "statement_opening": stmt_open,
             "statement_closing": round(stmt_open + w_in - w_out, 2) if stmt_open is not None else None,
+            # The first week only counts as covered from its Sunday if the statement starts by then.
+            "statement_covers_start": bool(weeks) or covers_week_start(starts, we),
             "sheet_opening": sheet_open,
             "opening_basis": None,
-            "opening_difference": (round(float(sheet_open) - stmt_open, 2)
-                                   if sheet is not None and stmt_open is not None and sheet_open is not None
-                                   else None),
         })
-    return {"period": parsed["period"], "balance": balance_check(parsed), "weeks": weeks,
+        # For a sheet that exists, decide now; hauzpay fills in a new sheet's predicted carry-forward later.
+        if sheet is not None:
+            weeks[-1].update(decide_opening(weeks[-1], sheet_open, starts))
+    return {"period": parsed["period"], "starts": starts.isoformat() if starts else None,
+            "balance": balance_check(parsed), "weeks": weeks,
             "totals": totals, "warnings": list(parsed.get("warnings") or [])}

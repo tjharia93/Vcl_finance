@@ -5,9 +5,16 @@ and calls:
 
 * ``preview_statement(file_url)`` — what WOULD happen, per Sun-Sat week. Writes nothing.
 * ``import_statement(file_url, week_ending=None)`` — writes the new lines as ordinary
-  rows on that week's Hauz-Pay ``Petty Cash Sheet`` (created if missing, opening
-  carried forward by ``create_for_week``). The sheet save mirrors them into
-  ``Petty Cash Entry`` as Unapproved, so they land in the normal approval queue.
+  rows on that week's Hauz-Pay ``Petty Cash Sheet`` (created if missing). The sheet save
+  mirrors them into ``Petty Cash Entry`` as Unapproved, so they land in the normal
+  approval queue.
+
+THE STATEMENT SETS THE OPENING (Tanuj, 15/10/2026), as a bank statement would: each
+week's sheet opens at the statement's balance at the start of that week, on a sheet the
+import creates or one still open, whatever the carry-forward said (a sheet's opening is
+otherwise a snapshot taken when it was created, and nothing updates it). The old value
+and the difference are in the preview and the result. An Approved / Closed / Submitted
+sheet is never changed, only flagged. See ``hauzpay_core.decide_opening``.
 
 Nothing here posts to ERPNext or QuickBooks; posting stays with ``weekpost``.
 
@@ -203,29 +210,34 @@ def _check_banks(p):
 
 
 def _predict_openings(p):
-    """For a week the import will CREATE, say what opening the new sheet will get.
+    """Say, per week, what the import does to the sheet's opening (``C.decide_opening``).
 
-    ``create_for_week`` carries the previous Hauz-Pay sheet's close forward, whatever the
-    statement says. When the week before is in this statement too, the import fills it
-    first, so the new sheet opens at that week's statement close. Otherwise it is the
-    last sheet on file — and a gap (weeks never loaded) shows up here as a difference.
+    THE STATEMENT IS THE AUTHORITY (Tanuj, 15/10/2026): an open or new sheet's opening is
+    set to the statement's balance at the start of its week, whatever the carry-forward
+    said. For a week the import will CREATE, the "system" figure is what ``create_for_week``
+    would carry forward: the previous week's statement close when that week is in this
+    statement too (the import fills it first), otherwise the last sheet on file.
     """
+    starts = C.period_start(p.get("period"))
     prev = None
     for w in p["weeks"]:
         if w["action"] == "create":
+            system = None
             if prev and prev["action"] != "skip" and \
                     getdate(prev["week_ending"]) == getdate(w["week_ending"]) - timedelta(days=7) \
                     and prev["statement_closing"] is not None:
-                w["sheet_opening"], w["opening_basis"] = prev["statement_closing"], "previous week in this statement"
+                system, w["opening_basis"] = prev["statement_closing"], "previous week in this statement"
             else:
                 info = _prior_close(FLOAT, w["week_ending"])
                 if info:
-                    w["sheet_opening"] = info["balance"]
-                    w["opening_basis"] = "carried from " + info["prior_name"]
-            if w["sheet_opening"] is not None and w["statement_opening"] is not None:
-                w["opening_difference"] = round(flt(w["sheet_opening"]) - w["statement_opening"], 2)
+                    system, w["opening_basis"] = info["balance"], "carried from " + info["prior_name"]
+            w["sheet_opening"] = system
+            w.update(C.decide_opening(w, system, starts))
         elif w["sheet"]:
             w["opening_basis"] = "sheet " + w["sheet"]
+        if w.get("opening_action") == "flag":
+            p.setdefault("warnings", []).append(
+                f"Week ending {getdate(w['week_ending']).strftime('%d/%m/%Y')}: {w['opening_note']}")
         prev = w
 
 
@@ -261,6 +273,13 @@ def import_statement(file_url, week_ending=None):
         if wk["action"] == "skip" or not new:
             res["note"] = (_("Week is {0} — left untouched.").format(wk["status"])
                            if wk["action"] == "skip" else _("Nothing new for this week."))
+            res["opening"] = _opening_result(wk)
+            if not wk["sheet"]:
+                res["opening"].update(action="none", note=_("No sheet for this week and nothing to import, so none was created."))
+            elif wk.get("opening_action") == "set" and wk.get("opening_difference"):
+                res["opening"] = _set_opening_only(wk)
+            elif wk.get("opening_action") == "flag":
+                res["warnings"] = [res["opening"]["note"]]
             done.append(res)
             continue
         res.update(_write_week(wk, new, custodian))
@@ -320,12 +339,8 @@ def _write_week(wk, new, custodian):
         name = create_for_week(week_ending=we, float_name=FLOAT, custodian_name=custodian,
                                opening_balance=wk["statement_opening"] or 0)
         created = True
-    doc = frappe.get_doc("Petty Cash Sheet", name)
-    if not frappe.has_permission("Petty Cash Sheet", "write", doc=doc):
-        frappe.throw(_("You may not write to the petty cash sheet {0}.").format(name), frappe.PermissionError)
-    if doc.docstatus != 0 or doc.status in C.LOCKED_STATUSES:
-        frappe.throw(_("The Hauz-Pay week ending {0} is {1}; nothing was imported.").format(
-            we.strftime("%d/%m/%Y"), doc.status))
+    doc = _open_sheet(name, we)
+    opening = _apply_opening(doc, wk)
 
     vouchers = sorted(doc.vouchers, key=lambda x: x.row_idx or 0)
     wages = sorted(doc.wages_entries, key=lambda x: x.row_idx or 0)
@@ -411,5 +426,47 @@ def _write_week(wk, new, custodian):
     doc.save()
     out["unapproved"], missing = _assert_nothing_decided(fresh, reused)
     out["warnings"].extend(missing)
-    out.update({"sheet": doc.name, "created": created, "summary": _summary(doc)})
+    out.update({"sheet": doc.name, "created": created, "opening": opening, "summary": _summary(doc)})
     return out
+
+
+def _open_sheet(name, we):
+    doc = frappe.get_doc("Petty Cash Sheet", name)
+    if not frappe.has_permission("Petty Cash Sheet", "write", doc=doc):
+        frappe.throw(_("You may not write to the petty cash sheet {0}.").format(name), frappe.PermissionError)
+    if doc.docstatus != 0 or doc.status in C.LOCKED_STATUSES:
+        frappe.throw(_("The Hauz-Pay week ending {0} is {1}; nothing was imported.").format(
+            we.strftime("%d/%m/%Y"), doc.status))
+    return doc
+
+
+def _opening_result(wk, old=None, new=None):
+    """What the import did to one sheet's opening, for the result. ``old`` is the value the
+    sheet actually had (a new sheet: what create_for_week carried forward)."""
+    old = wk.get("opening_system") if old is None else old
+    return {"action": wk.get("opening_action") or "none", "old": old,
+            "new": new if new is not None else old, "statement": wk.get("opening_statement"),
+            "difference": wk.get("opening_difference"), "note": wk.get("opening_note") or ""}
+
+
+def _apply_opening(doc, wk):
+    """Set the (open) sheet's opening from the statement when the plan says so. The value
+    is never re-derived by the controller: ``opening_balance`` is an ordinary editable field,
+    only ``carry_forward_opening`` writes it, and that runs once, in ``create_for_week``."""
+    old = flt(doc.opening_balance, 2)
+    if wk.get("opening_action") != "set":
+        return _opening_result(wk, old=old)
+    new = flt(wk["opening_statement"], 2)
+    doc.opening_balance = new
+    res = _opening_result(wk, old=old, new=new)
+    res["difference"] = round(new - old, 2)
+    res["note"] = f"Opening set from statement: {new:,.2f} (system carry-forward was {old:,.2f}, difference {new - old:,.2f})"
+    return res
+
+
+def _set_opening_only(wk):
+    """A week with nothing new to import whose open sheet disagrees with the statement."""
+    doc = _open_sheet(wk["sheet"], getdate(wk["week_ending"]))
+    res = _apply_opening(doc, wk)
+    doc.save()
+    return res

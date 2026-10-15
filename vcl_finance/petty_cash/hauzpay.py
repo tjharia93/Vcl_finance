@@ -153,9 +153,8 @@ def _live_state(weeks):
                 join `tabPetty Cash Sheet` s on s.name = c.parent
                 where c.parenttype = 'Petty Cash Sheet' and s.float = %s and s.docstatus < 2
                   and ifnull(c.src_ref, '') != ''""", (FLOAT,)):
-            for tok in re.split(r"[\s,]+", ref or ""):
-                if tok and not tok.startswith(C.CHARGES_REF):
-                    known[tok] = parent
+            for tok in C.ref_tokens(ref):
+                known[tok] = parent
 
     learned = {}
     for (rec,) in frappe.db.sql("""

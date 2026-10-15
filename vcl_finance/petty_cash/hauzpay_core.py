@@ -65,6 +65,14 @@ LEGACY_COLUMNS = ("date", "txid", "method", "payee", "name", "narration",
 
 
 # ------------------------------------------------------------------ helpers
+def ref_tokens(src_ref) -> list[str]:
+    """The Hauz Pay transaction ids a row's ``src_ref`` stands for (the lumped-charges
+    row carries ``HZP-CHARGES`` plus one id per charge). An id seen on ANY Hauz-Pay row,
+    voided ones included, is never imported again: a line moved between Vouchers and
+    Wages leaves its id on both the voided row and the new one."""
+    return [t for t in re.split(r"[\s,]+", src_ref or "") if t and not t.startswith(CHARGES_REF)]
+
+
 def week_saturday(d: date) -> date:
     """The Saturday ending the Sun-Sat week containing ``d`` (mirrors the sheet controller)."""
     return d + timedelta(days=(5 - d.weekday()) % 7)

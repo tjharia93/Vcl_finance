@@ -258,8 +258,7 @@ class Opening(unittest.TestCase):
         w = C.plan(C.parse_rows(stmt(WEEK)), RULES, sheets)["weeks"][0]
         self.assertEqual((w["opening_action"], w["opening_statement"], w["opening_system"], w["opening_difference"]),
                          ("set", 1000.0, 45656.77, -44656.77))
-        self.assertEqual(w["opening_note"], "Opening set from statement: 1,000.00 "
-                                            "(system carry-forward was 45,656.77, difference -44,656.77)")
+        self.assertEqual(w["opening_note"], "Opening from statement 1,000.00 · system 45,656.77 · difference -44,656.77")
 
     def test_a_closed_sheet_is_flagged_never_changed(self):
         for st in ("Approved", "Closed", "Submitted"):
@@ -288,7 +287,18 @@ class Opening(unittest.TestCase):
     def test_a_new_sheet_with_no_earlier_sheet(self):
         w = C.decide_opening({"statement_opening": 1000.0, "status": "New", "statement_covers_start": True}, None)
         self.assertEqual((w["opening_action"], w["opening_difference"]), ("set", None))
-        self.assertIn("system carry-forward was none (no earlier sheet)", w["opening_note"])
+        self.assertEqual(w["opening_note"], "Opening from statement 1,000.00 · system none (no earlier sheet) · difference n/a")
+
+    def test_refresh_walk_skips_statement_weeks_and_stops_at_the_first_non_draft(self):
+        later = [{"name": "A", "week_ending": "2026-10-17", "status": "Draft"},
+                 {"name": "B", "week_ending": "2026-10-24", "status": "Draft"},
+                 {"name": "C", "week_ending": "2026-10-31", "status": "Closed"},
+                 {"name": "D", "week_ending": "2026-11-07", "status": "Draft"}]
+        w = C.refresh_walk(later, {"2026-10-17"})
+        self.assertEqual(([s["name"] for s in w["refresh"]], w["stopped_at"]["name"]), (["B"], "C"))
+        w = C.refresh_walk(later[:2], set())
+        self.assertEqual(([s["name"] for s in w["refresh"]], w["stopped_at"]), (["A", "B"], None))
+        self.assertEqual(C.refresh_walk([dict(later[0], docstatus=1)], set())["refresh"], [])
 
 
 if __name__ == "__main__":

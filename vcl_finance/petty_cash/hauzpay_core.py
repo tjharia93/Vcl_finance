@@ -141,6 +141,34 @@ def _amt(v) -> str:
     return f"{float(v):,.2f}"
 
 
+def opening_note(statement, system) -> str:
+    """The preview / result wording (team lead, 15/10/2026)."""
+    sys_txt = _amt(system) if system is not None else "none (no earlier sheet)"
+    diff = _amt(round(statement - float(system), 2)) if system is not None else "n/a"
+    return f"Opening from statement {_amt(statement)} · system {sys_txt} · difference {diff}"
+
+
+def refresh_walk(later: list[dict], set_weeks) -> dict:
+    """Which later sheets re-carry their opening after an import. Pure.
+
+    ``later``: the float's sheets AFTER the first week the import touched, oldest first,
+    each ``{name, week_ending, status, docstatus}``. ``set_weeks``: week_endings whose
+    opening the import set from the statement - those are anchors and are skipped (the
+    statement wins over a carry-forward). Every other sheet is re-carried from the one
+    before it, in order, until the first one that is not a Draft: that one and everything
+    after it are left alone.
+    """
+    refresh, stopped = [], None
+    for s in later:
+        if s["week_ending"] in set_weeks:
+            continue
+        if int(s.get("docstatus") or 0) != 0 or (s.get("status") or "Draft") != "Draft":
+            stopped = s
+            break
+        refresh.append(s)
+    return {"refresh": refresh, "stopped_at": stopped}
+
+
 def decide_opening(week: dict, system_opening, starts: datetime | None = None) -> dict:
     """What the import does to one week's sheet opening. Pure; returns the fields to add to the week.
 
@@ -177,8 +205,7 @@ def decide_opening(week: dict, system_opening, starts: datetime | None = None) -
                                  "statement that covers the start of the week to set it."))
     else:
         out.update(opening_action="set",
-                   opening_note=(f"Opening set from statement: {_amt(stmt)} (system carry-forward was {sys_txt}"
-                                 + (f", difference {_amt(diff)})" if diff is not None else ")")))
+                   opening_note=opening_note(stmt, sysv))
     return out
 
 

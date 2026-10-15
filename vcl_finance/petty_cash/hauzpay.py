@@ -14,7 +14,10 @@ week's sheet opens at the statement's balance at the start of that week, on a sh
 import creates or one still open, whatever the carry-forward said (a sheet's opening is
 otherwise a snapshot taken when it was created, and nothing updates it). The old value
 and the difference are in the preview and the result. An Approved / Closed / Submitted
-sheet is never changed, only flagged. See ``hauzpay_core.decide_opening``.
+sheet is never changed, only flagged. See ``hauzpay_core.decide_opening``. After the
+import, the float's LATER Draft sheets re-carry their opening from the week before, in
+order, so they follow (``_refresh_later``), stopping at the first sheet that is not a Draft.
+No hook recomputes ``opening_balance`` on save, so what the import sets stays set.
 
 Nothing here posts to ERPNext or QuickBooks; posting stays with ``weekpost``.
 
@@ -185,6 +188,7 @@ def _build_plan(file_url):
     p = C.plan(parsed, load_rules(), sheets, learned_roster=learned, known_refs=known)
     _check_banks(p)
     _predict_openings(p)
+    _predict_refresh(p)
     return p, custodian
 
 
@@ -241,6 +245,71 @@ def _predict_openings(p):
         prev = w
 
 
+def _later_sheets(after_week):
+    """The float's sheets after ``after_week`` (a Saturday), oldest first, for ``C.refresh_walk``."""
+    out = []
+    for s in frappe.get_all("Petty Cash Sheet", filters={"float": FLOAT, "docstatus": ("<", 2)},
+                            fields=["name", "week_ending", "status", "docstatus", "opening_balance"],
+                            order_by="week_ending asc"):
+        we = week_saturday(getdate(s.week_ending))
+        if we > after_week:
+            out.append({"name": s.name, "week_ending": we.isoformat(), "status": s.status or "Draft",
+                        "docstatus": s.docstatus, "opening_balance": flt(s.opening_balance, 2)})
+    return out
+
+
+def _predict_refresh(p):
+    """Which later sheets will re-carry their opening once the import has run, said in the preview."""
+    first = next((w for w in p["weeks"] if w["action"] != "skip"), None)
+    p["opening_refresh"] = {"refresh": [], "stopped_at": None}
+    if not first:
+        return
+    walk = C.refresh_walk(_later_sheets(getdate(first["week_ending"])),
+                          {w["week_ending"] for w in p["weeks"] if w.get("opening_action") == "set"})
+    p["opening_refresh"] = walk
+    for s in walk["refresh"]:
+        p.setdefault("warnings", []).append(
+            f"{s['name']} (week ending {getdate(s['week_ending']).strftime('%d/%m/%Y')}, Draft, opening "
+            f"{s['opening_balance']:,.2f}) will have its opening re-carried from the week before it after the import.")
+    if walk["stopped_at"]:
+        st = walk["stopped_at"]
+        p.setdefault("warnings", []).append(
+            f"Carry-forward refresh stops at {st['name']} (week ending {getdate(st['week_ending']).strftime('%d/%m/%Y')}, "
+            f"{st['status']}): it and later weeks are not changed.")
+
+
+def _refresh_later(done):
+    """Re-carry the opening of the float's later Draft sheets, in order, after the import.
+
+    From the first week the import changed; sheets whose opening the statement set are
+    anchors and are skipped; stops at the first sheet that is not a Draft. Each sheet
+    carries from the one before it AFTER that one was saved, so the chain follows.
+    """
+    touched = [d for d in done if d.get("sheet") and (d.get("created") or d.get("vouchers") or d.get("wages")
+                                                      or d.get("charges") or (d.get("opening") or {}).get("changed"))]
+    if not touched:
+        return [], None
+    first = min(getdate(d["week_ending"]) for d in touched)
+    set_weeks = {d["week_ending"] for d in done if (d.get("opening") or {}).get("action") == "set"}
+    walk = C.refresh_walk(_later_sheets(first), set_weeks)
+    changed = []
+    for s in walk["refresh"]:
+        doc = frappe.get_doc("Petty Cash Sheet", s["name"])
+        if not frappe.has_permission("Petty Cash Sheet", "write", doc=doc):
+            frappe.throw(_("You may not write to the petty cash sheet {0}.").format(doc.name), frappe.PermissionError)
+        info = _prior_close(FLOAT, doc.week_ending, exclude=doc.name)
+        old = flt(doc.opening_balance, 2)
+        if not info or abs(flt(info["balance"], 2) - old) < 0.005:
+            continue
+        doc.opening_balance = flt(info["balance"], 2)
+        doc.save()
+        changed.append({"sheet": doc.name, "week_ending": s["week_ending"], "old": old, "new": doc.opening_balance,
+                        "basis": "carried from " + info["prior_name"],
+                        "note": f"{doc.name}: opening re-carried from {info['prior_name']} · changed "
+                                f"{old:,.2f} → {doc.opening_balance:,.2f}"})
+    return changed, walk["stopped_at"]
+
+
 # ------------------------------------------------------------------ API
 @frappe.whitelist()
 def preview_statement(file_url):
@@ -290,7 +359,12 @@ def import_statement(file_url, week_ending=None):
     warnings = [w for d in done for w in (d.get("warnings") or [])]
     totals["unapproved"] = sum(d.get("unapproved") or 0 for d in done)
     totals["posted"] = 0
-    return {"weeks": done, "totals": totals, "balance": p["balance"], "warnings": warnings}
+    refreshed, stopped = _refresh_later(done)
+    if stopped:
+        warnings.append(f"Carry-forward refresh stopped at {stopped['name']} ({stopped['status']}); "
+                        "it and later weeks were not changed.")
+    return {"weeks": done, "totals": totals, "balance": p["balance"], "warnings": warnings,
+            "refreshed": refreshed}
 
 
 def _assert_nothing_decided(fresh, reused=()):
@@ -460,7 +534,8 @@ def _apply_opening(doc, wk):
     doc.opening_balance = new
     res = _opening_result(wk, old=old, new=new)
     res["difference"] = round(new - old, 2)
-    res["note"] = f"Opening set from statement: {new:,.2f} (system carry-forward was {old:,.2f}, difference {new - old:,.2f})"
+    res["changed"] = abs(new - old) >= 0.005
+    res["note"] = C.opening_note(new, old) + f" · changed {old:,.2f} → {new:,.2f}"
     return res
 
 

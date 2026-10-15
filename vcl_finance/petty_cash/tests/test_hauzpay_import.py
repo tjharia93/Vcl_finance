@@ -67,7 +67,26 @@ def _get_all(doctype, filters=None, fields=None, pluck=None, **kw):
         if want:
             rows = [e for e in rows if e.origin_row in want[1]]
         return [Row(e) for e in rows]
+    if doctype == "Petty Cash Sheet":
+        return [Row(name=s.name, week_ending=s.week_ending, status=s.status, docstatus=s.docstatus or 0,
+                    opening_balance=s.opening_balance)
+                for s in sorted(STATE.sheets.values(), key=lambda s: s.week_ending)]
     raise AssertionError(f"unexpected get_all({doctype})")
+
+
+def _close(s):
+    rows = [r for t in ("vouchers", "wages_entries") for r in s[t] if not r.cancelled]
+    return round(_flt(s.opening_balance) - sum(_flt(r.amount) for r in rows if not r.cash_in)
+                 + sum(_flt(r.amount) for r in rows if r.cash_in), 2)
+
+
+def _prior_close(float_name, week_ending, exclude=None):
+    """The real one's rule: the latest sheet strictly before, its expected close."""
+    prior = [s for s in STATE.sheets.values() if s.week_ending < _getdate(week_ending) and s.name != exclude]
+    if not prior:
+        return None
+    p = max(prior, key=lambda s: s.week_ending)
+    return {"balance": _close(p), "prior_name": p.name}
 
 
 def _throw(msg, exc=None, **kw):
@@ -209,6 +228,7 @@ class ImportDecidesNothing(unittest.TestCase):
                                         for n, s in STATE.sheets.items() for we in weeks if s.week_ending == we},
                                        dict(STATE.known), {}, "Shiro")
         STATE.known = {}
+        H._prior_close = lambda *a, **kw: None
 
     def tearDown(self):
         for k, v in self._mods.items():
@@ -310,8 +330,8 @@ class StatementSetsTheOpening(ImportDecidesNothing):
         self.assertEqual(s.opening_balance, 1000.0)
         o = res["weeks"][0]["opening"]
         self.assertEqual((o["action"], o["old"], o["new"], o["difference"]), ("set", 45656.77, 1000.0, -44656.77))
-        self.assertEqual(o["note"], "Opening set from statement: 1,000.00 (system carry-forward was 45,656.77, "
-                                    "difference -44,656.77)")
+        self.assertEqual(o["note"], "Opening from statement 1,000.00 · system 45,656.77 · difference -44,656.77"
+                                    " · changed 45,656.77 → 1,000.00")
 
     def test_an_open_sheet_has_its_opening_replaced_and_the_old_value_recorded(self):
         s = self.sheet(opening=12345.0)
@@ -350,11 +370,41 @@ class StatementSetsTheOpening(ImportDecidesNothing):
         res = self.run_import()
         self.assertEqual((s.opening_balance, res["weeks"][0]["opening"]["action"]), (777.0, "keep"))
 
+    def later(self, we, status="Draft", opening=45656.77, spend=0):
+        name = _create_for_week(we, "Hauz-Pay", "Shiro", 0, carried=opening)
+        s = STATE.sheets[name]
+        s.status = status
+        if spend:
+            s.vouchers.append(Row(name=f"x-{name}", amount=spend, category="OT", recipient="x", txn_date=we))
+        return s
+
+    def test_later_draft_sheets_follow_and_the_walk_stops_at_the_first_closed_one(self):
+        H._prior_close = _prior_close
+        s17 = self.later(date(2026, 10, 17), spend=100)        # Shiro's live PCS-2026-00045 case
+        s24 = self.later(date(2026, 10, 24))
+        s31 = self.later(date(2026, 10, 31), status="Closed", opening=5.0)
+        s07 = self.later(date(2026, 11, 7), opening=6.0)
+        res = self.run_import()
+        close10 = _close(STATE.sheets["PCS-2026-10-10"])
+        self.assertEqual(STATE.sheets["PCS-2026-10-10"].opening_balance, 1000.0)
+        self.assertEqual((s17.opening_balance, s24.opening_balance), (close10, round(close10 - 100, 2)))
+        self.assertEqual((s31.opening_balance, s07.opening_balance), (5.0, 6.0))
+        self.assertEqual([(r["sheet"], r["old"], r["new"]) for r in res["refreshed"]],
+                         [(s17.name, 45656.77, close10), (s24.name, 45656.77, round(close10 - 100, 2))])
+        self.assertIn("changed 45,656.77 →", res["refreshed"][0]["note"])
+        self.assertTrue(any("stopped at " + s31.name in w for w in res["warnings"]), res["warnings"])
+
+    def test_the_preview_names_the_sheets_that_will_follow(self):
+        self.later(date(2026, 10, 17))
+        p = H.preview_statement("/private/files/hauzpay.xlsx")
+        self.assertEqual([s["name"] for s in p["opening_refresh"]["refresh"]], ["PCS-2026-10-17"])
+        self.assertTrue(any("PCS-2026-10-17 (week ending 17/10/2026, Draft, opening 45,656.77) will have its opening "
+                            "re-carried" in w for w in p["warnings"]), p["warnings"])
+
     def test_the_preview_says_what_it_will_do(self):
         self.sheet(opening=45656.77)
         w = H.preview_statement("/private/files/hauzpay.xlsx")["weeks"][0]
-        self.assertEqual(w["opening_note"], "Opening set from statement: 1,000.00 (system carry-forward was "
-                                            "45,656.77, difference -44,656.77)")
+        self.assertEqual(w["opening_note"], "Opening from statement 1,000.00 · system 45,656.77 · difference -44,656.77")
         STATE.sheets.clear()
         w = H.preview_statement("/private/files/hauzpay.xlsx")["weeks"][0]      # to be created, no earlier sheet
         self.assertEqual((w["action"], w["opening_action"]), ("create", "set"))

@@ -51,7 +51,19 @@ TREATMENTS = {
 TREATMENT_ORDER = list(TREATMENTS)
 
 # Entry types that can never carry VAT, so they need no treatment set by hand.
-AUTO_NOT_APPLICABLE = {"Wages Entry", "Loan"}
+# Replenishment is a top-up of the float: money moving between our own accounts.
+AUTO_NOT_APPLICABLE = {"Wages Entry", "Loan", "Replenishment"}
+
+# Floats whose top-ups are posted to ERPNext (Dr the float, Cr the bank it came from).
+# Hauz-Pay is a wallet topped up from the bank, so the transfer has to be booked
+# somewhere and petty cash is the only place that books it. Cash-tin top-ups stay
+# never-post. QuickBooks never gets a top-up from here.
+TOPUP_FLOATS = {"Hauz-Pay"}
+
+
+def is_topup(e: dict) -> bool:
+    """A cash-in line on a float whose top-ups post (ERPNext only)."""
+    return bool(int(e.get("cash_in") or 0)) and e.get("float") in TOPUP_FLOATS
 
 # Input VAT lands here, per company.
 VAT_ACCOUNT = {
@@ -116,7 +128,7 @@ def effective_vat(e: dict):
     """
     gross = r2(e.get("amount"))
     t = (e.get("vat_treatment") or "").strip() or None
-    if not t and e.get("source_type") in AUTO_NOT_APPLICABLE:
+    if not t and (e.get("source_type") in AUTO_NOT_APPLICABLE or int(e.get("cash_in") or 0)):
         t = "Not applicable"
     if not t:
         return None, gross, 0.0, "VAT not reviewed"
@@ -161,6 +173,13 @@ def build_erp_lines(lines, cash_account, vat_account, mode="grouped"):
     """
     if mode not in ("grouped", "each"):
         raise VatError(f"Unknown line mode {mode!r}")
+    # Top-ups (``cash_in``) run the other way: Dr the float, Cr the bank on the line.
+    # They carry no VAT and are kept out of the spend totals.
+    topups = [x for x in lines if x.get("cash_in")]
+    for x in topups:
+        if x.get("vat"):
+            raise VatError(f"A top-up cannot carry VAT ({x['name']}).")
+    lines = [x for x in lines if not x.get("cash_in")]
     rows = []
     if mode == "grouped":
         by = {}
@@ -189,13 +208,34 @@ def build_erp_lines(lines, cash_account, vat_account, mode="grouped"):
                 rows.append({"account": vat_account, "debit": r2(ln["vat"]), "credit": 0.0,
                              "remark": f"VAT {tag}", "entries": [ln["name"]]})
     gross = r2(sum(x["gross"] for x in lines))
-    rows.append({"account": cash_account, "debit": 0.0, "credit": gross,
-                 "remark": "Petty cash paid out", "entries": []})
+    if lines or not topups:
+        rows.append({"account": cash_account, "debit": 0.0, "credit": gross,
+                     "remark": "Petty cash paid out", "entries": []})
+    topup = r2(sum(x["gross"] for x in topups))
+    if topups:
+        if mode == "grouped":
+            by = {}
+            for ln in topups:
+                by.setdefault(ln["account"], []).append(ln)
+            for account in sorted(by):
+                grp = by[account]
+                rows.append({"account": account, "debit": 0.0, "credit": r2(sum(x["gross"] for x in grp)),
+                             "remark": f"Top-up from bank, {len(grp)} entr{'y' if len(grp) == 1 else 'ies'}: {_ids(grp)}",
+                             "entries": [x["name"] for x in grp]})
+        else:
+            for ln in topups:
+                tag = f"{ln.get('txn_date') or ''} Top-up {ln.get('subject') or ''} [{ln['name']}]".strip()
+                rows.append({"account": ln["account"], "debit": 0.0, "credit": r2(ln["gross"]),
+                             "remark": tag, "entries": [ln["name"]]})
+        rows.append({"account": cash_account, "debit": topup, "credit": 0.0,
+                     "remark": f"Top-up received, {len(topups)} entr{'y' if len(topups) == 1 else 'ies'}: {_ids(topups)}",
+                     "entries": [x["name"] for x in topups]})
     dr, cr = r2(sum(r["debit"] for r in rows)), r2(sum(r["credit"] for r in rows))
     if abs(dr - cr) > 0.005:
         raise VatError(f"Journal does not balance: debits {dr:,.2f}, credits {cr:,.2f}.")
     return rows, {"debit": dr, "credit": cr, "gross": gross,
-                  "net": r2(sum(x["net"] for x in lines)), "vat": r2(sum(x["vat"] for x in lines))}
+                  "net": r2(sum(x["net"] for x in lines)), "vat": r2(sum(x["vat"] for x in lines)),
+                  "topup": topup, "topups": len(topups)}
 
 
 # ---------------------------------------------------------------------------

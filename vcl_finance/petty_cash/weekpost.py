@@ -116,7 +116,8 @@ def _line(e):
             "vat": e["_vat"], "subject": P._subject(e), "txn_date": e.get("txn_date"),
             "kind": _kind(e), "notes": e.get("notes"), "supplier_ref": e.get("supplier_ref"),
             "treatment": e["_treatment"], "source_type": e["source_type"], "source_key": e.get("source_key"),
-            "company": e.get("company") or R.COMPANY, "chosen_qbo": e.get("qbo_account")}
+            "company": e.get("company") or R.COMPANY, "chosen_qbo": e.get("qbo_account"),
+            "cash_in": cint(e.get("cash_in"))}
 
 
 def _carry(b):
@@ -131,7 +132,8 @@ def _gates(sheet, rows, b, carry=()):
     unapproved = [e for e in live if e.get("status") != "Approved"]
     other_blocked = [e for e in b[P.BLOCKED] if e["_reason"] != "Not approved yet"]
     vat_bad = [e for e in list(b[P.READY]) + list(carry) if e["_vat_problem"]]
-    cash_in = [e for e in list(b[P.READY]) + list(carry) if cint(e.get("cash_in"))]
+    # A Hauz-Pay top-up with its bank chosen posts (Dr wallet / Cr bank); any other cash-in does not.
+    cash_in = [e for e in list(b[P.READY]) + list(carry) if cint(e.get("cash_in")) and not C.is_topup(e)]
     no_cash = sorted({f"{e.get('company') or R.COMPANY} · {e['float']}" for e in b[P.READY]
                       if not P.cash_account(e.get("company"), e["float"])})
     no_vat_acct = sorted({e.get("company") or R.COMPANY for e in b[P.READY]
@@ -241,10 +243,15 @@ def preview(week_ending, float_name=None, line_mode="grouped", **kwargs):
         "week_ending": week_ending, "float": float_name, "sheet": sheet, "gates": gates,
         "can_post_erp": ok and bool(b[P.READY]),
         "companies_filter": True,   # post_erp accepts ``companies``; the page checks this before offering a choice
-        "can_stage_qbo": sheet["status"] == "Approved" and bool(b[P.POSTED]) and not qblocked,
+        # Top-ups never go to QuickBooks, so a week whose only posted line is a top-up has nothing to stage.
+        "can_stage_qbo": (sheet["status"] == "Approved" and any(not cint(e.get("cash_in")) for e in b[P.POSTED])
+                          and not qblocked),
         "counts": {k: len(v) for k, v in b.items()}, "entries": len(rows),
         "held": sorted(held.values(), key=lambda h: -h["value"]),
-        "ready": {"lines": len(b[P.READY]), "gross": round(sum(flt(e["amount"]) for e in b[P.READY]), 2)},
+        "ready": {"lines": len(b[P.READY]),
+                  "gross": round(sum(flt(e["amount"]) for e in b[P.READY] if not cint(e.get("cash_in"))), 2),
+                  "topups": len([e for e in b[P.READY] if C.is_topup(e)]),
+                  "topup": round(sum(flt(e["amount"]) for e in b[P.READY] if C.is_topup(e)), 2)},
         "posted": {"lines": len(b[P.POSTED]), "gross": round(sum(flt(e["amount"]) for e in b[P.POSTED]), 2),
                    "journals": [{"name": n, "submitted": frappe.db.get_value("Journal Entry", n, "docstatus") == 1}
                                 for n in journals]},
@@ -333,9 +340,10 @@ def post_erp(week_ending, float_name=None, line_mode="grouped", allow_partial=0,
         je.posting_date = week_ending
         je.cheque_no = tag
         je.cheque_date = week_ending
-        je.user_remark = _("Petty cash {0}, week ending {1}: {2} entr{3}, gross {4:,.2f}, VAT {5:,.2f}. "
+        je.user_remark = _("Petty cash {0}, week ending {1}: {2} entr{3}, gross {4:,.2f}, VAT {5:,.2f}{6}. "
                            "Raised as a draft by the petty cash app; review and submit.").format(
-            float_name, week_ending, len(lines), "y" if len(lines) == 1 else "ies", totals["gross"], totals["vat"])
+            float_name, week_ending, len(lines), "y" if len(lines) == 1 else "ies", totals["gross"], totals["vat"],
+            _(", top-up {0:,.2f} from the bank").format(totals["topup"]) if totals.get("topup") else "")
         for r in rows_:
             je.append("accounts", {"account": r["account"], "debit_in_account_currency": r["debit"],
                                    "credit_in_account_currency": r["credit"], "user_remark": r["remark"]})

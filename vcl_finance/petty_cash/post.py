@@ -38,6 +38,7 @@ from frappe import _
 from frappe.utils import flt, now_datetime
 
 from vcl_finance.petty_cash import resolve as R
+from vcl_finance.petty_cash import weekpost_core as C
 from vcl_finance.petty_cash.api import PETTY_PRIV
 
 # Where the cash sits, per COMPANY per float. One tin serves four companies, so a
@@ -114,6 +115,12 @@ def _classify(e):
         return EXCLUDED, None, "Zero value"
 
     chosen = e.get("posting_account")
+    if C.is_topup(e):
+        # A wallet top-up posts Dr the float / Cr the bank, and the bank is chosen per
+        # line: the Replenishment route is shared with the Cash tin, where it never posts.
+        if chosen:
+            return READY, chosen, None
+        return BLOCKED, None, "Top-up: pick the bank it came from"
     if chosen:
         return READY, chosen, None
 

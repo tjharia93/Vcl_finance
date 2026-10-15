@@ -148,6 +148,48 @@ class ErpLines(unittest.TestCase):
         self.assertAlmostEqual(t["debit"], t["credit"], places=2)
 
 
+class TopUps(unittest.TestCase):
+    """A Hauz-Pay top-up: Dr the wallet, Cr the bank on the line, no VAT, outside the spend totals."""
+    SPEND = [line("P1", "5240.2 - Parking", 200), line("F1", "5208.1 - Staff Welfare", 1160, 160)]
+    TOP = [line("T1", "Co-OP - VCL", 200000, cash_in=1), line("T2", "Co-OP - VCL", 50000, cash_in=1)]
+
+    def test_replenishment_is_auto_not_applicable(self):
+        self.assertIsNone(C.effective_vat(entry("T", 5000, "Replenishment"))[3])
+        self.assertEqual(C.effective_vat(entry("T", 5000, "Replenishment"))[0], "Not applicable")
+
+    def test_grouped_topups_credit_the_bank_and_debit_the_wallet(self):
+        rows, t = C.build_erp_lines(self.SPEND + self.TOP, "Hauz-Pay Wallet - VCL", "VAT - VCL", "grouped")
+        bank = [r for r in rows if r["account"] == "Co-OP - VCL"]
+        self.assertEqual(len(bank), 1)
+        self.assertEqual((bank[0]["debit"], bank[0]["credit"]), (0.0, 250000.0))
+        self.assertIn("Top-up", bank[0]["remark"])
+        wallet = [r for r in rows if r["account"] == "Hauz-Pay Wallet - VCL"]
+        self.assertEqual(sorted((r["debit"], r["credit"]) for r in wallet), [(0.0, 1360.0), (250000.0, 0.0)])
+        self.assertEqual(t["debit"], t["credit"])
+        self.assertEqual((t["gross"], t["vat"], t["topup"], t["topups"]), (1360.0, 160.0, 250000.0, 2))
+
+    def test_each_mode_one_credit_per_topup(self):
+        rows, t = C.build_erp_lines(self.SPEND + self.TOP, "W", "V", "each")
+        self.assertEqual(len([r for r in rows if r["account"] == "Co-OP - VCL"]), 2)
+        self.assertTrue(all("Top-up" in r["remark"] for r in rows if r["account"] == "Co-OP - VCL"))
+        self.assertEqual(t["debit"], t["credit"])
+
+    def test_week_of_only_a_topup_has_no_empty_paid_out_line(self):
+        rows, t = C.build_erp_lines(self.TOP[:1], "W", "V", "grouped")
+        self.assertEqual([(r["account"], r["debit"], r["credit"]) for r in rows],
+                         [("Co-OP - VCL", 0.0, 200000.0), ("W", 200000.0, 0.0)])
+        self.assertEqual(t["gross"], 0.0)
+
+    def test_no_topups_leaves_the_journal_as_before(self):
+        rows, t = C.build_erp_lines(self.SPEND, "W", "V", "grouped")
+        self.assertEqual(rows[-1]["remark"], "Petty cash paid out")
+        self.assertEqual((t["topup"], t["topups"]), (0.0, 0))
+
+    def test_a_topup_with_vat_is_refused(self):
+        with self.assertRaises(C.VatError):
+            C.build_erp_lines([line("T", "Co-OP - VCL", 1160, 160, cash_in=1)], "W", "V")
+
+
 class QboLines(unittest.TestCase):
     def test_never_merges_across_tax_codes(self):
         ls = [dict(name="a", qbo_account="56", treatment="Standard 16%", gross=1160, vat=160, label="Food"),

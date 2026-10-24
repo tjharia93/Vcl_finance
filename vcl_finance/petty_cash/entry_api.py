@@ -30,6 +30,8 @@ write that will quietly undo itself. After the phase-4 flip, when entries become
 capture path and are ``Native``, both work normally.
 """
 
+import re
+
 import frappe
 from frappe import _
 from frappe.utils import cint, flt, now_datetime
@@ -154,6 +156,52 @@ def withdraw_entry(entry, reason=None):
     _write_lock_back(doc, False)
     return {"entry": doc.name, "status": doc.status,
             "withdrawn_by": doc.withdrawn_by, "reason": doc.withdrawal_reason}
+
+
+@frappe.whitelist(methods=["POST"])
+def set_receipt_marks(entry, pc_received=None, etr_received=None, cu_invoice_no=None):
+    """Finance records what the slip is while looking at it: a PC voucher, an
+    ETR receipt, and the ETR's Control Unit invoice number.
+
+    Each argument left out stays as it is. The ticks are written back to the
+    sheet row the entry mirrors, the way the approval lock is, so the sheet and
+    the queue never disagree about whether a slip was recorded. The CU number
+    lives on the entry only; the sheet has no column for it.
+    """
+    _assert_finance()
+    doc = _get(entry)
+    if doc.status == "Approved":
+        frappe.throw(_("This entry is already approved. Withdraw it to change the slip marks."))
+    changed = {}
+    for field, value in (("pc_received", pc_received), ("etr_received", etr_received)):
+        if value in (None, ""):
+            continue
+        flag = 1 if str(value).lower() in ("1", "true", "yes") else 0
+        if flag != int(doc.get(field) or 0):
+            doc.set(field, flag)
+            changed[field] = flag
+    if cu_invoice_no is not None:
+        no = re.sub(r"[^0-9A-Za-z/-]", "", str(cu_invoice_no)).strip()
+        if no and not doc.etr_received and "etr_received" not in changed:
+            frappe.throw(_("Tick ETR before recording its invoice number."))
+        if no != (doc.get("etr_cu_invoice_no") or ""):
+            doc.etr_cu_invoice_no = no or None
+            changed["etr_cu_invoice_no"] = no or None
+    if not changed:
+        return {"entry": doc.name, "changed": {}, "pc_received": int(doc.pc_received or 0),
+                "etr_received": int(doc.etr_received or 0), "cu_invoice_no": doc.get("etr_cu_invoice_no")}
+    doc.save()
+    ticks = {k: v for k, v in changed.items() if k in ("pc_received", "etr_received")}
+    if ticks and doc.sync_state == "Mirrored" and doc.origin_doctype and doc.origin_row:
+        try:
+            frappe.db.set_value(doc.origin_doctype, doc.origin_row, ticks, update_modified=False)
+        except Exception:
+            frappe.log_error(
+                title="Petty cash: could not write slip marks back to the sheet row",
+                message=f"entry={doc.name} row={doc.origin_doctype}/{doc.origin_row}\n\n{frappe.get_traceback()}",
+            )
+    return {"entry": doc.name, "changed": changed, "pc_received": int(doc.pc_received or 0),
+            "etr_received": int(doc.etr_received or 0), "cu_invoice_no": doc.get("etr_cu_invoice_no")}
 
 
 @frappe.whitelist(methods=["POST"])
@@ -423,7 +471,8 @@ def pending_entries(limit=200, float_name=None, newest_first=0, **kwargs):
         fields=["name", "txn_date", "week_ending", "float", "company", "source_type",
                 "source_key", "category", "recipient", "notes", "memo", "amount",
                 "cash_in", "status", "posting_account", "receipt", "pc_received",
-                "etr_received", "receipt_asked_on", "receipt_ask_reason",
+                "etr_received", "etr_cu_invoice_no", "vat_treatment", "vat_amount",
+                "receipt_asked_on", "receipt_ask_reason",
                 "withdrawn_on", "withdrawal_reason", "sync_state"],
         order_by=(
             "week_ending desc, txn_date desc, creation desc"
@@ -486,6 +535,13 @@ def pending_entries(limit=200, float_name=None, newest_first=0, **kwargs):
             # the photograph on the approval card. A private file URL; the
             # phone fetches it with its own session, so permissions still hold.
             "receipt": e.get("receipt") or None,
+            # What Finance has recorded about the slip so far, so the phone can
+            # show the marks and let the approver set them while the photo is open.
+            "pc_received": int(e.get("pc_received") or 0),
+            "etr_received": int(e.get("etr_received") or 0),
+            "cu_invoice_no": e.get("etr_cu_invoice_no") or None,
+            "vat_treatment": e.get("vat_treatment") or None,
+            "vat_amount": flt(e.get("vat_amount")) if e.get("vat_amount") else None,
             "receipt_asked": bool(e.get("receipt_asked_on")),
             "receipt_ask_reason": e.get("receipt_ask_reason"),
             "withdrawn": bool(e.get("withdrawn_on")),

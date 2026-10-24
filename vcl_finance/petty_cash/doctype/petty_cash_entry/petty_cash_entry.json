@@ -27,6 +27,7 @@
   "col_evidence",
   "pc_received",
   "etr_received",
+  "etr_cu_invoice_no",
   "section_approval",
   "status",
   "approved_by",
@@ -93,7 +94,7 @@
    "label": "Transaction Date",
    "in_list_view": 1,
    "search_index": 1,
-   "description": "The date the cash actually moved. This is what files the entry into a week. LEFT BLANK when the source row carries no date \u2014 it used to default to Today, which stamped undated May rows with the day the sync happened to run and made a wrong date look authoritative. A blank date is visible and fixable; an invented one is neither. derive_week_ending falls back to the source sheet's week so the entry still lands in the right week."
+   "description": "The date the cash actually moved. This is what files the entry into a week. LEFT BLANK when the source row carries no date — it used to default to Today, which stamped undated May rows with the day the sync happened to run and made a wrong date look authoritative. A blank date is visible and fixable; an invented one is neither. derive_week_ending falls back to the source sheet's week so the entry still lands in the right week."
   },
   {
    "fieldname": "week_ending",
@@ -101,7 +102,7 @@
    "label": "Week Ending (Saturday)",
    "read_only": 1,
    "search_index": 1,
-   "description": "Derived from txn_date (Sun-Sat, so the following Saturday). Never typed. Falls back to the source sheet's week when the row carries no date \u2014 151 legacy rows do."
+   "description": "Derived from txn_date (Sun-Sat, so the following Saturday). Never typed. Falls back to the source sheet's week when the row carries no date — 151 legacy rows do."
   },
   {
    "fieldname": "float",
@@ -200,6 +201,13 @@
    "fieldtype": "Check",
    "label": "ETR Received",
    "default": "0"
+  },
+  {
+   "fieldname": "etr_cu_invoice_no",
+   "fieldtype": "Data",
+   "label": "ETR CU invoice no",
+   "description": "The Control Unit invoice number printed on the ETR receipt, as Finance read it at approval.",
+   "depends_on": "eval:doc.etr_received"
   },
   {
    "fieldname": "section_approval",
@@ -443,7 +451,7 @@
    "read_only": 1,
    "permlevel": 1,
    "search_index": 1,
-   "description": "The draft Journal Entry this line was posted into. Blank means this line has never been posted. Set by the posting run and by nothing else \u2014 it is the only record of what has already reached the books, and a hand-edit here would let a line post twice."
+   "description": "The draft Journal Entry this line was posted into. Blank means this line has never been posted. Set by the posting run and by nothing else — it is the only record of what has already reached the books, and a hand-edit here would let a line post twice."
   },
   {
    "fieldname": "posted_on",
@@ -451,7 +459,7 @@
    "label": "Posted On",
    "read_only": 1,
    "permlevel": 1,
-   "description": "When the posting run picked this line up. Not the journal's posting date \u2014 that is the week ending."
+   "description": "When the posting run picked this line up. Not the journal's posting date — that is the week ending."
   },
   {
    "fieldname": "exclude_from_posting",
@@ -499,7 +507,7 @@
    "label": "Memo on the journal line",
    "length": 180,
    "permlevel": 1,
-   "description": "What the accountant reads against this line in ERPNext and QuickBooks. Set at approval by whoever knows what the payment was actually for \u2014 the payee name alone often does not say. Blank falls back to the date and payee."
+   "description": "What the accountant reads against this line in ERPNext and QuickBooks. Set at approval by whoever knows what the payment was actually for — the payee name alone often does not say. Blank falls back to the date and payee."
   },
   {
    "fieldname": "section_vat",

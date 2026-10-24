@@ -482,6 +482,10 @@ def pending_entries(limit=200, float_name=None, newest_first=0, **kwargs):
             "amount": e["amount"], "cash_in": e["cash_in"],
             "status": e.get("status"),
             "evidence": bool(e.get("receipt") or e.get("pc_received") or e.get("etr_received")),
+            # Where the slip is, not only whether there is one: the phone shows
+            # the photograph on the approval card. A private file URL; the
+            # phone fetches it with its own session, so permissions still hold.
+            "receipt": e.get("receipt") or None,
             "receipt_asked": bool(e.get("receipt_asked_on")),
             "receipt_ask_reason": e.get("receipt_ask_reason"),
             "withdrawn": bool(e.get("withdrawn_on")),

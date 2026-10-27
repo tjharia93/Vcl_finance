@@ -15,6 +15,17 @@ app_include_js = "/assets/vcl_finance/js/petty_cash.js"
 web_include_css = "/assets/vcl_finance/css/petty_cash.css"
 web_include_js = "/assets/vcl_finance/js/petty_cash.js"
 
+# Website redirects
+# -----------------
+# TRK-00270: the finance dev pages now live under /fc-dev. The old routes send the
+# browser on, keeping any sub-path; the #/... screen route is kept by the browser.
+# 302, not 301: a browser keeps a 301 for good, so a move put back would stay broken.
+# The Web Page routes must move on the site BEFORE this ships (docs/fc-dev-move.md).
+website_redirects = [
+    {"source": r"/finance-dev(/.*)?", "target": r"/fc-dev/finance\1", "redirect_http_status": 302},
+    {"source": r"/petty-cash-dev(/.*)?", "target": r"/fc-dev/petty-cash\1", "redirect_http_status": 302},
+]
+
 # Installation patch list
 # -----------------------
 # Run after install: seed Petty Cash Category and the 5 vehicle plates, then the

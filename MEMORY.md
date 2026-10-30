@@ -9,9 +9,8 @@ Last updated: **2026-10-28**
   reconcile fields and receipts on five child DocTypes), 9ea7ae9 (08/10, VAT fields on Petty Cash
   Entry) and 083a1df (24/10, ETR invoice number field). Whether each has been migrated: unknown.
 - `app_version` in `hooks.py` is 0.1.0.
-- Not on main: branch `hauzpay-import` has 10 commits (14/10 to 24/10): Hauz Pay statement import,
-  `move_row` between Vouchers and Wages, Hauz-Pay top-ups posting to ERPNext, and the Frappe
-  version range in `pyproject.toml`. Two of its commits were cherry-picked to main (ad804be, 083a1df).
+- 30/10/2026: `main` and `hauzpay-import` hold the same code (d787dac): Hauz Pay statement import,
+  `move_row`, Hauz-Pay top-ups posting, the Frappe version range. The site deploys from `hauzpay-import`.
   Branch `claude/fc-dev-pages` has one commit (bf23375, 27/10, old finance dev routes to /fc-dev).
 - Reverted: the AR Control Check DocTypes (ed9ca9e, reverted 54f6b0e on 01/10).
 
@@ -84,5 +83,5 @@ Last updated: **2026-10-28**
 
 ## Open questions
 - Which `main` commit is live, and is any migrate pending? — Tanuj.
-- Does `hauzpay-import` merge to main, and when? — Tanuj.
+- Switch the Frappe Cloud bench from `hauzpay-import` to `main` (now identical)? — Tanuj.
 - How is `test_monthly_vat_report` meant to run (it needs `frappe`)? — unknown.

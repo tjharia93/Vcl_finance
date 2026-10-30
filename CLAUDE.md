@@ -10,12 +10,13 @@ Position and the MPESA float API, and three AR Reconciliation DocTypes.
 
 ## Where it runs
 - Site: https://vimitconverters.frappe.cloud
-- Deploys from branch: `main` (`docs/DEPLOY.md`). Pushing to main does NOT deploy. Tanuj deploys
-  on Frappe Cloud, and runs a migrate when a DocType or patch changes.
+- Deploys from branch: `hauzpay-import` (what the live site runs; the Android app's CLAUDE.md and the
+  PC's checks agree). On 30/10/2026 `main` was brought level with it, so the two hold the same code; push
+  to both. Pushing does NOT deploy. Tanuj deploys on Frappe Cloud, and runs a migrate when a DocType or
+  patch changes.
 - Front ends that call it: the Compass app (`vcl_compass` repo) for approvals, postings and cash;
   the `/petty-cash/` web pages in `vcl_finance/www/petty-cash/`; Desk via `doc_events` in `hooks.py`.
-- Open branches not on main: `hauzpay-import` (Hauz Pay statement import, `move_row`, Frappe
-  version range in `pyproject.toml`) and `claude/fc-dev-pages` (one commit, 27/10).
+- Open branch not on main: `claude/fc-dev-pages` (one commit, 27/10).
 
 ## Working rules
 - Commit as `-c user.name=Claude -c user.email=noreply@anthropic.com`.

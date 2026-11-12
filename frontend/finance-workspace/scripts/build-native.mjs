@@ -1,0 +1,14 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import vm from 'node:vm';
+import {fileURLToPath} from 'node:url';
+const here=path.dirname(fileURLToPath(import.meta.url)),project=path.dirname(here),read=name=>fs.readFileSync(path.join(here,name),'utf8');
+const files=['routes.cjs','services.js','finance-tools.js','native-ui.js','native-documents.js','native-cheques.js','native-audit.js','native-receipts.js','native-petty.js','native-reports.js','native-payroll.js','native-suppliers.js','native-banking.js','native-related.js','native.js','native-shell.js'];
+const code=files.map(f=>{const text=read(f);new vm.Script(text,{filename:f});return text;}).join('\n');
+if(/createElement\(['"]iframe|<iframe|FINANCE_VIEWS|FINANCE_BRIDGE|srcdoc|frappe\.new_doc/.test(code))throw Error('Embedded screens must not enter the native build');
+new vm.Script(code,{filename:'finance-workspace.js'});
+const css=(read('workspace.css')+read('native-ui.css')).replaceAll('{#','{ #');
+const html='<div id="finance-workspace" data-build="2026-11-12-native-1"><p style="padding:32px">Loading VCL Finance…</p></div><style>'+css+'</style>',dist=path.join(project,'dist');fs.mkdirSync(dist,{recursive:true});
+if(/\{[#%{]/.test(html))throw Error('CSS must not introduce Jinja delimiters');
+fs.writeFileSync(path.join(dist,'finance-workspace.js'),code);fs.writeFileSync(path.join(dist,'finance-workspace.html'),html);fs.writeFileSync(path.join(dist,'manifest.json'),JSON.stringify({build:'2026-11-12-native-1',architecture:'native Finance views; existing server accounting handlers',files,bytes:Buffer.byteLength(code)},null,2));
+console.log(JSON.stringify({build:'2026-11-12-native-1',modules:files.length,javascriptBytes:Buffer.byteLength(code),htmlBytes:Buffer.byteLength(html)}));

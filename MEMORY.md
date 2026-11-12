@@ -1,8 +1,16 @@
 # MEMORY — read this first
 
-Last updated: **2026-10-28**
+Last updated: **2026-11-12**
 
-## State
+
+## Finance native frontend — 12 November 2026
+- The user rejected embedded Compass/Desk screens and requested a native rebuild. The frontend now builds its own Finance forms/controllers with the existing server handlers. See `frontend/finance-workspace/NATIVE_REBUILD.md` for coverage, validation limits and rollback.
+- Build `2026-11-12-native-1` requires no private source snapshots. The iframe host, frame bridge and legacy adapters are retired. The shared native FC/BP&A workflows remain.
+- This is frontend-only: no new backend migration, role assignment, policy flag change or financial transaction is part of the rebuild.
+- The KES customer-cheque handler's USD bank destination is blocked in Finance because that existing handler sets 1:1 rates. A currency-aware backend implementation is required before enabling this path; the original Compass endpoint is unchanged.
+- Original snapshots and release/QA backups stay outside Git. Genuine posting and multi-user approval acceptance require explicitly selected transactions.
+
+## Historical state (older entries below)
 - Live on site: unknown. The newest commit on `main` is 083a1df (24/10). Which commit Frappe Cloud
   last deployed is not recorded in the repo.
 - Migrate pending: unknown. Commits that add DocType fields since 2026-09 include a54bcc4 (22/09,

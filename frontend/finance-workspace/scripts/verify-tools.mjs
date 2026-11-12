@@ -30,30 +30,4 @@ assert.equal(T.byId('bank-adjustment').defaults.voucher_type,'Bank Entry');
 assert(T.cards(ctx({ops:true},{modules:['cheques']})).includes('#/tools/customer-cheques'));
 assert(!T.cards(ctx({bpa:true})).includes('#/tools/bank-payment'));
 assert.equal(T.route(T.byId('receipts')),'payments/receipts');
-// Verify the integration boundary delegates entry creation to native ERPNext,
-// with the selected company and direction, without any save/submit call.
-const operations=[],native={new_doc:(...args)=>operations.push(['new_doc',...args]),set_route:(...args)=>operations.push(['set_route',...args])};
-const frame={isConnected:true,contentWindow:{frappe:native,addEventListener(){},removeEventListener(){}},contentDocument:{querySelector:()=>({}),createElement:()=>({}),head:{append(){}},body:{},addEventListener(){}}};
-const callbacks={dirty(){},route(){},go(){},error:message=>{throw Error(message);}};
-T.mount(frame,{tool:T.byId('bank-receipt')},{company:'Allowed company'},callbacks);
-T.mount(frame,{tool:T.byId('bank-payment')},{company:'Allowed company'},callbacks);
-T.mount(frame,{tool:T.byId('bank-transfer')},{company:'Allowed company'},callbacks);
-assert.deepEqual(JSON.parse(JSON.stringify(operations)),[
- ['new_doc','Payment Entry',{company:'Allowed company',payment_type:'Receive'}],
- ['new_doc','Payment Entry',{company:'Allowed company',payment_type:'Pay'}],
- ['new_doc','Payment Entry',{company:'Allowed company',payment_type:'Internal Transfer'}]
-]);
-T.mount(frame,{tool:T.byId('bank-reconciliation')},{company:'Allowed company'},callbacks);
-assert.deepEqual(JSON.parse(JSON.stringify(operations.at(-1))),['set_route','Form','Bank Reconciliation Tool','Bank Reconciliation Tool']);
-assert.equal(native.route_options.company,'Allowed company');
-// Desk publishes its APIs before the initial page has finished routing.
-// Opening an entry must wait for that first page, or startup overwrites it.
-const scheduled=[],delayedOperations=[];let pageReady=false;
-context.setTimeout=fn=>scheduled.push(fn);
-const delayedFrame={...frame,contentWindow:{...frame.contentWindow,frappe:{new_doc:(...args)=>delayedOperations.push(args),set_route(){}}},contentDocument:{...frame.contentDocument,querySelector:()=>pageReady?{}:null}};
-T.mount(delayedFrame,{tool:T.byId('bank-payment')},{company:'Allowed company'},callbacks);
-assert.equal(delayedOperations.length,0);
-assert.equal(scheduled.length,1);
-pageReady=true;scheduled.shift()();
-assert.deepEqual(JSON.parse(JSON.stringify(delayedOperations)),[['Payment Entry',{company:'Allowed company',payment_type:'Pay'}]]);
-console.log('PASS: finance tool routing, bank-entry defaults, payroll isolation, role gates, company-form reuse and safe deep links');
+console.log('PASS: finance catalogue, source role gates and legacy deep links');

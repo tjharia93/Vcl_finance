@@ -14,6 +14,8 @@ const transfer=directions.transaction_totals.find(t=>t.direction==='Internal Tra
 let reads=[];
 context.fetch=async url=>{const u=new URL(url,'https://local.test');const start=Number(u.searchParams.get('limit_start')||0);reads.push(start);return {ok:true,json:async()=>({message:Array.from({length:start===0?1000:201},(_,i)=>({name:'entry-'+(start+i)}))})}};
 const all=await S.all('Purchase Invoice',{company:'Allowed'},['name']);assert.equal(all.length,1201);assert.deepEqual(reads,[0,1000]);
+context.fetch=async url=>{const u=new URL(url,'https://local.test');const rows=u.pathname.endsWith('work_queue')?{rows:[{kind:'Review',title:'JE-1',name:'FIN-1'}]}:u.searchParams.get('doctype')==='Journal Entry'?[{name:'JE-1',owner:'operator'},{name:'JE-2',owner:'operator'}]:[];return {ok:true,json:async()=>({message:rows})};};
+const queue=await S.queue({backend:true,workspace:'ops',user:'operator',company:'Allowed',capabilities:{ops:true}});assert.equal(queue.rows.length,2);assert.equal(queue.rows.filter(r=>r.name==='JE-1').length,0);assert.equal(queue.rows.at(-1).name,'JE-2');
 context.fetch=async()=>({ok:false,status:403,json:async()=>({exception:'Permission denied'})});
 await assert.rejects(()=>S.capabilities(),/Permission denied/);
 const nativeContext={window:{},Date};vm.runInNewContext(fs.readFileSync(new URL('./native.js',import.meta.url),'utf8'),nativeContext);

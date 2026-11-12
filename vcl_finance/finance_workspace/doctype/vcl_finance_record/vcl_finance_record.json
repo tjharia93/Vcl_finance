@@ -4,7 +4,7 @@
   "module": "Finance Workspace",
   "custom": 0,
   "issingle": 0,
-  "autoname": "format:FIN-.YYYY.-.#####",
+  "autoname": "FIN-.YYYY.-.#####",
   "title_field": "title",
   "track_changes": 1,
   "engine": "InnoDB",

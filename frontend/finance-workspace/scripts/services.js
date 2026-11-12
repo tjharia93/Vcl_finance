@@ -46,9 +46,11 @@
   const rows=Object.entries(groups).map(([k,amount])=>{const[period,account,cost_center,category]=k.split('|');return {period,account,cost_center,category,amount};});
   return {rows,totals:Object.fromEntries(['Revenue','Expense'].map(k=>[k,rows.filter(r=>r.category===k).reduce((s,r)=>s+r.amount,0)])),basis:{company:ctx.company,currency:ctx.currency,source:'ERPNext',period_start:start,period_end:end,read_at:new Date().toISOString(),review_status:'Provisional management'},quality:{tagged_lines:tagged,main_lines:main,product_profitability_ready:false,gaps:['Costs and cost-centre attribution require FC validation. QuickBooks statutory reporting is separate.']}};
  }
- async function queue(ctx){if(ctx.backend)return call(NS+'work_queue',{company:ctx.company,own:ctx.workspace==='ops'?1:0});const rows=[];
-  for(const kind of ['je','pi','pe','si']){try{const drafts=await all(config[kind][0],{company:ctx.company,docstatus:0},['name','owner','posting_date']);for(const r of drafts)if((ctx.workspace!=='ops'&&ctx.capabilities.fc)||r.owner===ctx.user)rows.push({name:r.name,title:r.name,kind:config[kind][0],owner:r.owner,due_date:null,status:'Draft',route:kind==='je'?'journals/edit?open='+encodeURIComponent(r.name):'ops/transactions?kind='+kind+'&query='+encodeURIComponent(r.name)});}catch(e){if(e.status!==403)throw e;}}
-  return {rows,note:'Assigned reviews and close tasks await the backend release. These are accessible transaction drafts, with no inferred review assignment.'};}
+ async function queue(ctx){const result=ctx.backend?await call(NS+'work_queue',{company:ctx.company,own:ctx.workspace==='ops'?1:0}):{rows:[],note:'Assigned reviews and close tasks await the backend release. These are accessible transaction drafts, with no inferred review assignment.'};
+  if(ctx.backend&&ctx.workspace!=='ops')return result;
+  const reviewed=new Set(result.rows.filter(r=>r.kind==='Review').map(r=>r.title));
+  for(const kind of ['je','pi','pe','si']){try{const filters={company:ctx.company,docstatus:0};if(ctx.workspace==='ops')filters.owner=ctx.user;const drafts=await all(config[kind][0],filters,['name','owner','posting_date']);for(const r of drafts)if(((ctx.workspace!=='ops'&&ctx.capabilities.fc)||r.owner===ctx.user)&&!(kind==='je'&&reviewed.has(r.name)))result.rows.push({name:r.name,title:r.name,kind:config[kind][0],owner:r.owner,due_date:null,status:'Draft',route:kind==='je'?'journals/edit?open='+encodeURIComponent(r.name):'ops/transactions?kind='+kind+'&query='+encodeURIComponent(r.name)});}catch(e){if(e.status!==403)throw e;}}
+  return result;}
 
  window.FWServices={call,list,all,capabilities,drafts,actuals,queue,summarize,config,NS};
 })();

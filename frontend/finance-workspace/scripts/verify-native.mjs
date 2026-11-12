@@ -13,6 +13,7 @@ assert.equal(T.allowed(T.byId('payslips'),ctx({fc:true},{modules:['payroll']})),
 assert.equal(T.allowed(T.byId('payslips'),ctx({fc:true},{modules:['payroll','absence']})),true);
 assert.equal(T.allowed(T.byId('submit-sales'),ctx({fc:true},{modules:['sales']})),false);
 assert.equal(T.allowed(T.byId('submit-sales'),ctx({fc:true},{is_accounts_manager:true})),true);
+assert.equal(N.workspaceFor(N.resolve('tools/bank-payment'),{bpa:true,ops:true,fc:true},'bpa'),'ops');assert.equal(N.workspaceFor(N.resolve('tools/bank-payment'),{bpa:true,ops:true,fc:true},'fc'),'fc');assert.equal(N.workspaceFor({native:'drafts',ws:'bpa'},{bpa:true,fc:true},'bpa'),'fc');
 const modules=new Set(['receipts','documents','banking','cheques','audit','petty','payroll','related','suppliers','reports']);
 for(const t of T.tools){const route=T.route(t),d=N.resolve(route);assert(d,route+' resolves');assert(d.native||modules.has(d.module),route+' has a native controller');}
 for(const [old,expected] of [['/journal-dev?open=ACC-JV-EXAMPLE','journals/edit?open=ACC-JV-EXAMPLE'],['/finance-dev#/petty-grid?s=SHEET-EXAMPLE','payments/petty-grid?s=SHEET-EXAMPLE'],['/fc-dev/reports?tab=tb&from=2026-01-01','reports?tab=tb&from=2026-01-01'],['/receipts-dev?draft=PAY-EXAMPLE','payments/receipts?draft=PAY-EXAMPLE'],['/recon-dev?type=Customer&party=Example','close/allocate?type=Customer&party=Example']])assert.equal(R.legacy(old),expected);

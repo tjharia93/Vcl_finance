@@ -29,6 +29,14 @@ after_install = "vcl_finance.install.after_install"
 # no enqueue, no scheduler (Frappe Cloud pauses the scheduler on every deploy) — and
 # the mirror swallows its own exceptions so it can never block a custodian's save.
 doc_events = {
+    "Sales Invoice": {"before_validate": "vcl_finance.workspace.dimensions.apply_new_invoice_dimensions"},
+    "Purchase Invoice": {"before_validate": "vcl_finance.workspace.dimensions.apply_new_invoice_dimensions"},
+    "Journal Entry": {
+        "validate": "vcl_finance.workspace.guards.journal_validate",
+        "before_submit": "vcl_finance.workspace.guards.journal_before_submit",
+        "on_submit": "vcl_finance.workspace.guards.journal_on_submit",
+        "on_cancel": "vcl_finance.workspace.guards.journal_on_cancel",
+    },
     "Petty Cash Sheet": {
         "on_update": [
             "vcl_finance.petty_cash.mirror.on_sheet_update",
@@ -39,6 +47,10 @@ doc_events = {
         ],
     },
 }
+
+permission_query_conditions = {"VCL Finance Record": "vcl_finance.workspace.guards.record_query", "GL Entry": "vcl_finance.workspace.guards.gl_query"}
+before_migrate = ["vcl_finance.workspace.install.ensure_roles"]
+has_permission = {"VCL Finance Record": "vcl_finance.workspace.guards.record_has_permission", "GL Entry": "vcl_finance.workspace.guards.gl_has_permission"}
 
 # Scheduled jobs
 # --------------

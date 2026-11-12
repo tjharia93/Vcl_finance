@@ -1,0 +1,268 @@
+[
+  {
+    "workstream": "Sales & Revenue",
+    "title": "Cutoff sales invoicing at month-end",
+    "description": "No backdated invoices after D0. Dr Debtors / Cr Revenue / Cr VAT Output.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Sales & Revenue",
+    "title": "Sales completeness \u00e2\u20ac\u201d QuickBooks \u00e2\u2020\u201d ERPNext",
+    "description": "Every QuickBooks invoice has its ERP Sales Invoice (the sync runs intraday). Count and value for the month.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Sales & Revenue",
+    "title": "eTIMS CUIN on every invoice",
+    "description": "Unvalidated invoices will not reconcile against eTIMS; fix before VAT.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Sales & Revenue",
+    "title": "Credit notes captured in both books",
+    "description": "Dr Revenue / Dr VAT Output / Cr Debtors. QuickBooks credit memos mirror to ERP.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Sales & Revenue",
+    "title": "Sales-rep attribution complete (CSRA)",
+    "description": "No submitted invoice without a sales person; drives rep performance and the daily audit.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Sales & Revenue",
+    "title": "Confirm revenue-recognition cutoff for dispatched-not-invoiced",
+    "description": "Goods out at month-end but not invoiced: accrue or not. Sets policy for both books.",
+    "day": 1,
+    "final_required": true
+  },
+  {
+    "workstream": "Purchases & Payables",
+    "title": "Cutoff purchase invoicing",
+    "description": "Dr Expense / Inventory (2210 SRBNB for stock) + Dr VAT Input / Cr Creditors.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Purchases & Payables",
+    "title": "Purchase completeness \u00e2\u20ac\u201d ERP \u00e2\u2020\u2019 QuickBooks Bills",
+    "description": "Every ERP Purchase Invoice pushed as a Bill; nothing stranded in the queue.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Purchases & Payables",
+    "title": "GRNI accrual \u00e2\u20ac\u201d goods received not invoiced",
+    "description": "Accrue at cutoff, reverse next period. Not systematic today: a close gap.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Purchases & Payables",
+    "title": "Import / landed costs booked",
+    "description": "PFI + freight + duty + clearing to landed cost. Manual via the SUPP\u00e2\u2020\u2019ERP mirror.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Purchases & Payables",
+    "title": "WHT on applicable supplier payments",
+    "description": "Dr Creditors / Cr WHT Payable; certificates issued.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Purchases & Payables",
+    "title": "Key supplier statement recon",
+    "description": "Tie the biggest creditors to their statements before AP tie-out.",
+    "day": 1,
+    "final_required": false
+  },
+  {
+    "workstream": "Purchases & Payables",
+    "title": "Approve GRNI accrual methodology & threshold",
+    "description": "How GRNI is measured and the value threshold. Accounting policy; the auditor tests it.",
+    "day": 1,
+    "final_required": true
+  },
+  {
+    "workstream": "Payroll & People",
+    "title": "Post permanent payroll journal (QuickBooks)",
+    "description": "Dr Salaries / Cr Bank, PAYE, NSSF, SHIF, Housing Levy. QuickBooks Payroll is the statutory source.",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Payroll & People",
+    "title": "Post casual wages from the attendance app",
+    "description": "Friday-locked, OT computed. The app writes nothing yet: a manual journal today.",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Payroll & People",
+    "title": "Schedule statutory remittances (by the 9th)",
+    "description": "PAYE, NSSF, SHIF, Housing Levy from the payroll payable balances.",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Payroll & People",
+    "title": "Where do casual wages post \u00e2\u20ac\u201d QuickBooks only or both?",
+    "description": "The posting path and how the attendance app feeds the journal.",
+    "day": 2,
+    "final_required": true
+  },
+  {
+    "workstream": "Expenses & Cash-outs",
+    "title": "Post petty-cash sheets",
+    "description": "Weekly sheets through the posting layer to QuickBooks Purchases. Dr Expense (+VAT Input) / Cr Petty Cash.",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Expenses & Cash-outs",
+    "title": "Book recurring utilities as service items",
+    "description": "KPLC, Safaricom, internet as non-stock items (avoids the SRBNB override).",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Expenses & Cash-outs",
+    "title": "Amortise prepayments",
+    "description": "Insurance, rent, licences spread over their period.",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Expenses & Cash-outs",
+    "title": "Accrue known unbilled costs",
+    "description": "Dr Expense / Cr Accruals; reverse next period.",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Expenses & Cash-outs",
+    "title": "Run depreciation",
+    "description": "Needs an agreed fixed-asset register as the source. Gap.",
+    "day": 2,
+    "final_required": false
+  },
+  {
+    "workstream": "Bank & Cash Reconciliation",
+    "title": "Reconcile each bank account (\u00c3\u201410) in QuickBooks",
+    "description": "The statutory cash position; unmatched items investigated before tie-out.",
+    "day": 3,
+    "final_required": false
+  },
+  {
+    "workstream": "Bank & Cash Reconciliation",
+    "title": "Clear matured post-dated cheques",
+    "description": "Cheques in hand whose date has passed: bank them or return them.",
+    "day": 3,
+    "final_required": false
+  },
+  {
+    "workstream": "Bank & Cash Reconciliation",
+    "title": "Clear the Holding Bank routing",
+    "description": "The Holding Bank distorts the ERP\u00e2\u2020\u201dQBO bank comparison; bank tie-out means little until it is drained.",
+    "day": 3,
+    "final_required": false
+  },
+  {
+    "workstream": "Bank & Cash Reconciliation",
+    "title": "Bank charges & FX revaluation",
+    "description": "Dr Bank charges / Cr Bank; revalue forex balances at month-end rate.",
+    "day": 3,
+    "final_required": false
+  },
+  {
+    "workstream": "Bank & Cash Reconciliation",
+    "title": "Authorise clearing / retiring the Holding Bank",
+    "description": "Structural change to bank routing. One-way once re-routed.",
+    "day": 3,
+    "final_required": true
+  },
+  {
+    "workstream": "VAT & Statutory",
+    "title": "VAT reconciliation \u00e2\u20ac\u201d eTIMS vs QuickBooks",
+    "description": "The daily pipeline with the 5-tag offset register. All pending tags resolved before filing.",
+    "day": 4,
+    "final_required": false
+  },
+  {
+    "workstream": "VAT & Statutory",
+    "title": "Post net VAT journal",
+    "description": "Dr VAT Output / Cr VAT Input / VAT Payable.",
+    "day": 4,
+    "final_required": false
+  },
+  {
+    "workstream": "VAT & Statutory",
+    "title": "File VAT3 + pay (by the 20th)",
+    "description": "Must equal the reconciled figure, not a raw QuickBooks pull.",
+    "day": 4,
+    "final_required": false
+  },
+  {
+    "workstream": "VAT & Statutory",
+    "title": "File WHT return + issue certificates (by the 20th)",
+    "description": "From the WHT Payable balance accrued on purchases.",
+    "day": 4,
+    "final_required": false
+  },
+  {
+    "workstream": "VAT & Statutory",
+    "title": "Confirm the authoritative VAT figure (eTIMS vs QuickBooks)",
+    "description": "When they diverge, which is filed. Per-month sign-off.",
+    "day": 4,
+    "final_required": true
+  },
+  {
+    "workstream": "Tie-out, Sign-off & Lock",
+    "title": "ERP \u00e2\u2020\u201d QuickBooks tie-out \u00e2\u20ac\u201d AR, AP, Bank",
+    "description": "Every residual explained against the known-differences register.",
+    "day": 6,
+    "final_required": false
+  },
+  {
+    "workstream": "Tie-out, Sign-off & Lock",
+    "title": "Draft adjusting journals (drafts only)",
+    "description": "True-ups as drafts in ERP; never auto-submitted.",
+    "day": 6,
+    "final_required": false
+  },
+  {
+    "workstream": "Tie-out, Sign-off & Lock",
+    "title": "Review TB + P&L + Balance Sheet (both books)",
+    "description": "Sanity-check both trial balances and the statements against the prior month.",
+    "day": 6,
+    "final_required": false
+  },
+  {
+    "workstream": "Tie-out, Sign-off & Lock",
+    "title": "Issue the management pack",
+    "description": "P&L, balance sheet, cashflow, AR/AP ageing, VAT position.",
+    "day": 6,
+    "final_required": false
+  },
+  {
+    "workstream": "Tie-out, Sign-off & Lock",
+    "title": "Lock the period",
+    "description": "No backdated posting in either book once signed.",
+    "day": 6,
+    "final_required": false
+  },
+  {
+    "workstream": "Tie-out, Sign-off & Lock",
+    "title": "Authorise period lock + sign off the close",
+    "description": "Final gate. Reopening a locked, filed period is costly.",
+    "day": 6,
+    "final_required": true
+  }
+]

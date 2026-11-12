@@ -1,0 +1,94 @@
+{
+  "doctype": "DocType",
+  "name": "VCL Finance Workspace Settings",
+  "module": "Finance Workspace",
+  "custom": 0,
+  "issingle": 1,
+  "track_changes": 1,
+  "engine": "InnoDB",
+  "field_order": [
+    "final_approver",
+    "phase_1",
+    "phase_2",
+    "phase_3",
+    "phase_4",
+    "journal_review_required",
+    "sync_respects_locks",
+    "release_attestation",
+    "reporting_gaps_json",
+    "dimension_rules_json"
+  ],
+  "fields": [
+    {
+      "fieldname": "final_approver",
+      "label": "Final approver",
+      "fieldtype": "Link",
+      "options": "User",
+      "reqd": 1
+    },
+    {
+      "fieldname": "phase_1",
+      "label": "Release phase 1",
+      "fieldtype": "Check",
+      "default": 1
+    },
+    {
+      "fieldname": "phase_2",
+      "label": "Release phase 2",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "phase_3",
+      "label": "Release phase 3",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "phase_4",
+      "label": "Release phase 4",
+      "fieldtype": "Check",
+      "default": 0
+    },
+    {
+      "fieldname": "journal_review_required",
+      "label": "Require independent journal review",
+      "fieldtype": "Check"
+    },
+    {
+      "fieldname": "sync_respects_locks",
+      "label": "Backdated sync lock compatibility verified",
+      "fieldtype": "Check"
+    },
+    {
+      "fieldname": "release_attestation",
+      "label": "Release acceptance evidence",
+      "fieldtype": "Long Text"
+    },
+    {
+      "fieldname": "reporting_gaps_json",
+      "label": "Management reporting gaps (JSON)",
+      "fieldtype": "Long Text"
+    },
+    {
+      "fieldname": "dimension_rules_json",
+      "label": "Future invoice dimension rules (JSON)",
+      "fieldtype": "Long Text"
+    }
+  ],
+  "permissions": [
+    {
+      "role": "System Manager",
+      "read": 1,
+      "select": 1,
+      "report": 1,
+      "print": 0,
+      "export": 0,
+      "create": 1,
+      "write": 1,
+      "delete": 0
+    }
+  ],
+  "sort_field": "modified",
+  "sort_order": "DESC"
+}

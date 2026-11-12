@@ -43,7 +43,7 @@ views.locks={html:minimal,js:common+'\n;\n'+read('locks.js')};
 // Link state to parent navigation when programmatic finance screens change hash.
 const bridge=read('frame-bridge.js');
 for(const [key,view] of Object.entries(views))new vm.Script(view.js,{filename:key+'.js'});
-const code='window.FINANCE_VIEWS='+JSON.stringify(views)+';\nwindow.FINANCE_EMBEDDED_CSS='+JSON.stringify(read('embedded.css'))+';\nwindow.FINANCE_ROUTES_SOURCE='+JSON.stringify(read('routes.cjs'))+';\nwindow.FINANCE_BRIDGE='+JSON.stringify(bridge)+';\n'+read('routes.cjs')+'\n'+read('services.js')+'\n'+read('native.js')+'\n'+read('workspace.js');
+const code='window.FINANCE_VIEWS='+JSON.stringify(views)+';\nwindow.FINANCE_EMBEDDED_CSS='+JSON.stringify(read('embedded.css'))+';\nwindow.FINANCE_ROUTES_SOURCE='+JSON.stringify(read('routes.cjs'))+';\nwindow.FINANCE_BRIDGE='+JSON.stringify(bridge)+';\n'+read('routes.cjs')+'\n'+read('services.js')+'\n'+read('finance-tools.js')+'\n'+read('native.js')+'\n'+read('workspace.js');
 new vm.Script(code,{filename:'finance-workspace.js'});
 new vm.Script(bridge,{filename:'frame-bridge.js'});
 const html='<div id="finance-workspace" data-build="2026-11-12-vcl-roles-1"><p style="padding:32px">Loading Finance workspace…</p></div><style>'+read('workspace.css')+'</style>';

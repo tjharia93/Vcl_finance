@@ -4,7 +4,7 @@
 
 Three users are created inside the transaction and used with ``frappe.set_user``:
   custodian  Petty Cash User                      keys lines
-  signer     Petty Cash User + Petty Cash Approver signs and codes lines, cannot tick or close
+  signer     Petty Cash User + Accounts User signs and codes lines (decision 16/11/2026), cannot tick or close
   finance    Accounts Manager                     everything, including tick, close, approve
 Nothing here runs as Administrator except the set-up.
 """
@@ -14,7 +14,7 @@ RESULTS = []
 BASE = {}
 WEEK, DAY = "2027-02-13", "2027-02-09"
 USERS = {"custodian": ["Petty Cash User"],
-         "signer": ["Petty Cash User", "Petty Cash Approver"],
+         "signer": ["Petty Cash User", "Accounts User"],
          "finance": ["Accounts Manager", "Accounts User"]}
 
 

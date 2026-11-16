@@ -251,8 +251,7 @@ def get_feed(sheet):
 
 PETTY_PRIV = {"Accounts Manager", "System Manager"}
 
-# Who may SIGN one entry — wider than PETTY_PRIV, and wider by exactly one
-# purpose-built role.
+# Who may SIGN and CODE one entry — wider than PETTY_PRIV.
 #
 # Shiro keys petty cash and Tanuj asked for her to approve it too. Doing that by
 # granting Accounts Manager would have handed the petty cash custodian the bank,
@@ -263,7 +262,11 @@ PETTY_PRIV = {"Accounts Manager", "System Manager"}
 # approving a week, reopening one and posting all stay where they were. The
 # recorder can sign a line; she cannot lock the week she keyed, and she cannot
 # push it into a journal.
-PETTY_APPROVERS = PETTY_PRIV | {"Petty Cash Approver"}
+# Decision (Tanuj, 16/11/2026): ACCOUNTS codes the lines and signs them; the petty cash
+# custodian (Shiro) only keys what is paid out. So the signing role is the Accounts User
+# role plus the accounts managers. The old purpose-built "Petty Cash Approver" role is no
+# longer part of the rule and is removed from the custodian's account.
+PETTY_APPROVERS = PETTY_PRIV | {"Accounts User"}
 
 
 def _is_accounts_manager():

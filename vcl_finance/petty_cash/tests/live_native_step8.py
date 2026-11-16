@@ -41,7 +41,7 @@ def run():
     from vcl_finance.petty_cash.doctype.petty_cash_sheet import petty_cash_sheet as PCS
     frappe.db.savepoint("native_step8")
     try:
-        for who, roles in ((FINANCE, ["Accounts Manager", "Accounts User"]), (SIGNER, ["Petty Cash User", "Petty Cash Approver"])):
+        for who, roles in ((FINANCE, ["Accounts Manager", "Accounts User"]), (SIGNER, ["Petty Cash User", "Accounts User"])):
             u = frappe.new_doc("User"); u.update({"email": who, "first_name": who.split("@")[0], "send_welcome_email": 0, "enabled": 1})
             for r in roles: u.append("roles", {"role": r})
             u.insert(ignore_permissions=True)

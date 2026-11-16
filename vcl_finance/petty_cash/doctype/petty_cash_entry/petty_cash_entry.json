@@ -688,7 +688,9 @@
   {
    "role": "Accounts User",
    "read": 1,
-   "permlevel": 1
+   "permlevel": 1,
+   "write": 1,
+   "create": 0
   },
   {
    "role": "Petty Cash User",

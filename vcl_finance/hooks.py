@@ -70,3 +70,12 @@ scheduler_events = {
 fixtures = [
     {"dt": "Role", "filters": [["role_name", "in", ["Petty Cash User"]]]},
 ]
+
+
+# Callable from print formats. ``petty_cash_loan_rows`` is every loan across all weeks,
+# whether the week keeps its lines as rows on the sheet or as entries.
+jinja = {
+    "methods": [
+        "vcl_finance.petty_cash.api.petty_cash_loan_rows",
+    ],
+}

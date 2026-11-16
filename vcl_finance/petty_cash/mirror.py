@@ -377,5 +377,15 @@ def on_sheet_update(doc, method=None):
     deploy, and the sheet controller already recomputes every total on every save, so
     doing the mirror in the same transaction costs almost nothing at this data scale
     (~600 real rows per float-year).
+
+    A NATIVE week is skipped outright: its lines are entries already, there are no rows
+    to copy, and running the sweep could only ever mark something Orphaned.
     """
+    if frappe.utils.cint(doc.get("native_lines")):
+        return
+    # A row being written FROM an existing entry (a line moved in from a native week, or
+    # a native week converted back): the caller links the entry to the row first and
+    # runs the mirror itself, so this save must not create a second entry for it.
+    if doc.flags.get("skip_mirror"):
+        return
     mirror_sheet(doc)

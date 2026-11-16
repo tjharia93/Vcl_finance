@@ -465,6 +465,11 @@ def pending_entries(limit=200, float_name=None, newest_first=0, **kwargs):
     }
     if float_name:
         filters["float"] = float_name
+    # Only the companies this user may see (User Permission on Company). get_all
+    # ignores user permissions, so the queue leaked other companies' lines to a
+    # Vimit-only user (B5, 16/11/2026).
+    visible = frappe.get_list("Company", pluck="name", limit_page_length=0)
+    filters["company"] = ("in", visible or [""])
 
     rows = frappe.get_all(
         "Petty Cash Entry", filters=filters,

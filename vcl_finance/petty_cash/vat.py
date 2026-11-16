@@ -107,18 +107,21 @@ def vat_week(week_ending, float_name=None, **kwargs):
     """Every live entry in a week with its VAT state, for the review screen."""
     _assert_read()
     float_name = float_name or kwargs.get("float")
-    filters = {"week_ending": week_ending, "cancelled": 0, "sync_state": ["!=", "Orphaned"]}
-    if float_name:
-        # The sheet's lines, not the week date: May/June sheets are stored on off-Saturdays.
-        from vcl_finance.petty_cash.post import sheet_filters
-        filters = dict(sheet_filters(week_ending, float_name)[0], cancelled=0, sync_state=["!=", "Orphaned"])
-    rows = frappe.get_all(
-        "Petty Cash Entry", filters=filters,
-        fields=["name", "txn_date", "float", "company", "source_type", "source_key", "recipient", "notes", "memo",
+    _VAT_FIELDS = ["name", "txn_date", "float", "company", "source_type", "source_key", "recipient", "notes", "memo",
                 "amount", "cash_in", "status", "receipt", "receipt_etr", "pc_received", "etr_received",
                 "vat_treatment", "vat_amount", "net_amount", "vat_basis", "supplier_ref", "journal_entry",
-                "exclude_from_posting"],
-        order_by="txn_date asc, creation asc", limit_page_length=0)
+                "exclude_from_posting"]
+    if float_name:
+        # The sheet's lines (mirrored and native), not the week date: May/June sheets
+        # are stored on off-Saturdays. One shared lookup — see weeks.py.
+        from vcl_finance.petty_cash import weeks
+        rows = weeks.entries_for_week(week_ending, float_name, fields=_VAT_FIELDS,
+                                      filters={"cancelled": 0})[0]
+    else:
+        rows = frappe.get_all(
+            "Petty Cash Entry", fields=_VAT_FIELDS,
+            filters={"week_ending": week_ending, "cancelled": 0, "sync_state": ["!=", "Orphaned"]},
+            order_by="txn_date asc, creation asc", limit_page_length=0)
     out = []
     for e in rows:
         t, net, vat, problem = C.effective_vat(e)

@@ -15,6 +15,10 @@
   const CFG = JSON.parse(document.getElementById("wz-data").textContent);
   const SHEET = CFG.sheet;
   const CLOSED = CFG.status === "Approved" || CFG.status === "Submitted";
+  // A week that keeps its lines as entries (no rows on the sheet). Adding is the same
+  // call either way; editing and deleting go through the entry actions instead of a
+  // row write on the sheet.
+  const NATIVE = !!(CFG.summary && CFG.summary.native);
   const CSRF =
     (window.frappe && frappe.csrf_token) ||
     document.querySelector('meta[name="csrf_token"]')?.content ||
@@ -385,6 +389,23 @@
   async function saveEdit() {
     const id = st.editId, a = amtNum();
     const sect = st.editSection;
+    if (NATIVE) {
+      const f = { amount: a };
+      if (sect === "voucher") {
+        Object.assign(f, {
+          txn_date: st.date, recipient: st.recipient, voucher_no: st.voucherNo,
+          category: st.cat === "IN" ? "" : st.cat, cash_in: st.cat === "IN" ? 1 : 0,
+          pc_received: st.pc ? 1 : 0, etr_received: st.etr ? 1 : 0,
+        });
+      } else if (sect === "wages" || sect === "loan") {
+        Object.assign(f, { txn_date: st.date, recipient: st.recipient, staff_id: st.staffId,
+                           reason: st.reason, paye: st.paye ? 1 : 0 });
+      } else if (sect === "misc") {
+        Object.assign(f, { txn_date: st.date, notes: st.notes });
+      }
+      await callMethod(`${M}.edit_entry`, { sheet: SHEET, entry_id: id, ...f });
+      return;
+    }
     if (sect === "voucher") {
       await restChildPut("vouchers", id, {
         txn_date: st.date, recipient: st.recipient, voucher_no: st.voucherNo,
@@ -433,9 +454,12 @@
     const rem = summary.expected_close || 0;
     const out = summary.total_out || 0;
     let html = `<div class="feed-hero">
-        <div><div class="k">Cash remaining</div><div class="v ${rem < 0 ? "neg" : ""}">${fmt(rem)} <span class="of">/ ${fmt(CFG.opening_balance)}</span></div></div>
+        <div><div class="k">${summary.balance_label || "Cash remaining"}</div><div class="v ${rem < 0 ? "neg" : ""}">${fmt(rem)} <span class="of">/ ${fmt(CFG.opening_balance)}</span></div></div>
         <div class="grow"><div class="k">Spent</div><div class="out">${fmt(out)} <small>KES</small></div></div>
       </div>`;
+    // On a week that keeps entries a deleted line is voided, not zeroed. It stays on
+    // record for Finance; here it simply drops out of the list, as a delete always has.
+    if (NATIVE) items = items.filter((it) => !it.cancelled);
     if (!items.length) {
       html += `<div class="feed-empty"><div class="big">🧾</div><div class="t">No entries yet</div><div class="s">Tap “New entry” to record the first one.</div></div>`;
       elFeed.innerHTML = html; return;
@@ -459,7 +483,7 @@
           <div class="body"><div class="nm">${esc(it.label)}</div><div class="sb">${sub || "—"}</div></div>
           <div class="amt ${it.direction === "in" ? "in" : ""}">${it.direction === "in" ? "+" : ""}${fmt(it.amount)}</div>
           ${clip}
-          <button type="button" class="del" title="Delete">🗑</button>
+          <button type="button" class="del" title="${NATIVE ? "Cancel entry" : "Delete"}" aria-label="${NATIVE ? "Cancel entry" : "Delete"}">🗑</button>
         </div>`;
     });
     if (lastDay !== null) html += `</div>`;
@@ -473,8 +497,56 @@
     });
   }
 
+  // A small in-page box that asks for a reason. Resolves with the text, or null if closed.
+  function askReason(title, body) {
+    return new Promise((resolve) => {
+      const wrap = document.createElement("div");
+      wrap.className = "wz-ask";
+      wrap.innerHTML = `<div class="wz-ask-box" role="dialog" aria-modal="true" aria-labelledby="wzAskT">
+          <div class="wz-ask-t" id="wzAskT"></div>
+          <div class="wz-ask-b"></div>
+          <textarea id="wzAskReason" rows="3" maxlength="200" aria-label="Reason"></textarea>
+          <div class="wz-ask-err" hidden>Give a reason to cancel the entry.</div>
+          <div class="wz-ask-a">
+            <button type="button" class="wz-ask-no">Keep the entry</button>
+            <button type="button" class="wz-ask-yes">Cancel entry</button>
+          </div>
+        </div>`;
+      wrap.querySelector(".wz-ask-t").textContent = title;
+      wrap.querySelector(".wz-ask-b").textContent = body;
+      document.body.appendChild(wrap);
+      const ta = wrap.querySelector("textarea");
+      const done = (v) => { wrap.remove(); resolve(v); };
+      wrap.querySelector(".wz-ask-no").addEventListener("click", () => done(null));
+      wrap.addEventListener("click", (e) => { if (e.target === wrap) done(null); });
+      wrap.querySelector(".wz-ask-yes").addEventListener("click", () => {
+        if (!ta.value.trim()) { wrap.querySelector(".wz-ask-err").hidden = false; ta.focus(); return; }
+        done(ta.value);
+      });
+      ta.addEventListener("keydown", (e) => { if (e.key === "Escape") done(null); });
+      setTimeout(() => ta.focus(), 0);
+    });
+  }
+
   async function del(it) {
     if (CLOSED) return;
+    if (NATIVE) {
+      // The entry is cancelled, not deleted: it stays on record with the reason, so the
+      // action says so and asks why.
+      const what = `${CAT_LABEL[it.cat_code] || it.label} · KES ${fmt(it.amount)}`;
+      // Asked on the page, not with the browser's prompt(): phone browsers and in-app
+      // browsers often block prompt(), and then the bin silently did nothing (UAT A4, D-01).
+      const reason = await askReason(`Cancel entry ${what}?`,
+        "The entry is kept on record as cancelled. Why is it being cancelled?");
+      if (reason === null) return;
+      if (!reason.trim()) { toast("Give a reason to cancel the entry", "error"); return; }
+      try {
+        await callMethod(`${M}.cancel_entry`, { sheet: SHEET, entry_id: it.id, remark: reason.trim() });
+        await refreshFeed();
+        toast("Entry cancelled");
+      } catch (e) { toast(e.message || "Could not cancel the entry", "error"); }
+      return;
+    }
     if (!confirm(`Delete ${CAT_LABEL[it.cat_code] || it.label} · KES ${fmt(it.amount)}?`)) return;
     try {
       // Soft-delete by zeroing the row's money so it drops out of the feed (keeps
@@ -505,4 +577,10 @@
   renderFeed(CFG.feed || [], CFG.summary || {});
   if (!CLOSED) openAdd();
   if (!isDesktop() && location.hash !== "#new") root.classList.remove("adding");
+  // "Open entry" on the week page lands here with ?open=<entry>: open that line.
+  const wanted = new URLSearchParams(location.search).get("open");
+  if (wanted && !CLOSED) {
+    const hit = Object.values(FEED).find((it) => String(it.id) === wanted);
+    if (hit) { openEdit(hit); root.classList.add("adding"); }
+  }
 })();

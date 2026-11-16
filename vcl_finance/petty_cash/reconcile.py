@@ -41,12 +41,8 @@ def _entry_totals(sheet_name):
     it. Cancelled entries are excluded to match ``compute_totals``, which skips voided
     rows for every total, the expected close and the posting.
     """
-    rows = frappe.get_all(
-        "Petty Cash Entry",
-        filters={"origin_sheet": sheet_name, "cancelled": 0, "sync_state": ("!=", "Orphaned")},
-        fields=["amount", "cash_in"],
-        limit_page_length=0,
-    )
+    from vcl_finance.petty_cash import weeks
+    rows = weeks.week_entries(sheet_name, fields=["amount", "cash_in"], filters={"cancelled": 0})
     out = sum(flt(r["amount"]) for r in rows if not r["cash_in"])
     into = sum(flt(r["amount"]) for r in rows if r["cash_in"])
     return round(out, 2), round(into, 2), len(rows)

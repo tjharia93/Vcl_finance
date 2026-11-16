@@ -69,15 +69,10 @@ ENTRY_FIELDS = ["name", "txn_date", "float", "company", "source_type", "source_k
 
 
 def _entries(week_ending, float_name):
-    filters, sheet_name = P.sheet_filters(week_ending, float_name)
-    rows = frappe.get_all("Petty Cash Entry", filters=filters, fields=ENTRY_FIELDS,
-                          order_by="txn_date asc, creation asc", limit_page_length=0)
-    if sheet_name:
-        seen = {e["name"] for e in rows}
-        rows += [e for e in frappe.get_all(
-            "Petty Cash Entry", fields=ENTRY_FIELDS, limit_page_length=0,
-            filters=[["week_ending", "=", week_ending], ["float", "=", float_name], ["origin_sheet", "is", "not set"]])
-            if e["name"] not in seen]
+    # One shared lookup (weeks.py): the sheet's mirrored lines, its native lines, and
+    # any unlinked entry dated into the week — each exactly once.
+    from vcl_finance.petty_cash import weeks
+    rows = weeks.entries_for_week(week_ending, float_name, fields=ENTRY_FIELDS, include_orphaned=True)[0]
     # An entry whose sheet row was deleted is Orphaned and stops counting, EXCEPT while it
     # is still linked to a journal: dropping it from view would make a re-post rebuild the
     # draft without it while the entry still points at that draft.
@@ -177,6 +172,23 @@ def _erp_preview(ready, posted_carry, mode, week_ending, float_name):
         journals.append({"company": company, "cash_account": cash, "vat_account": vat_acct, "rows": rows,
                          "totals": totals, "lines": len(lines)})
     return journals
+
+
+def _not_for_qbo(entries):
+    """Posted lines that are deliberately NOT sent to QuickBooks, by reason.
+
+    ``_qbo_lines`` leaves these out by design. They are stated here so the posting result
+    accounts for every posted line: staged, held with a reason, or not for QuickBooks.
+    """
+    out = {}
+    for e in entries:
+        company = e.get("company") or R.COMPANY
+        if not R.posts_to_qbo(company):
+            out.setdefault(f"{company} has no books in QuickBooks", []).append(e)
+        elif cint(e.get("cash_in")):
+            out.setdefault("Cash in is not an expense", []).append(e)
+    return [{"reason": k, "lines": len(v), "amount": round(sum(flt(x["amount"]) for x in v), 2),
+             "entries": [x["name"] for x in v]} for k, v in sorted(out.items())]
 
 
 def _qbo_lines(entries):
@@ -295,19 +307,107 @@ def _require_gates(sheet, rows, b, allow_partial):
                      title=_("Part of the week is held"))
 
 
+def _lock_week(sheet_name):
+    """The same lock a line change, a close and an approve take, taken first."""
+    from vcl_finance.petty_cash import native
+    return native.lock_sheet(sheet_name)
+
+
+def _retrying(fn):
+    """Each of these actions is the whole of its request. It runs in a fresh transaction
+    that takes the week lock before it reads anything, and is run again if another session
+    got in first. See ``native.exclusive_call``."""
+    import functools
+
+    @functools.wraps(fn)
+    def run(*args, **kwargs):
+        from vcl_finance.petty_cash.native import exclusive_call
+        return exclusive_call(fn, args, kwargs)
+    return run
+
+
+def _stored_postings(sheet_name):
+    try:
+        return json.loads(frappe.db.get_value(SHEET, sheet_name, "posting_results") or "[]")
+    except ValueError:
+        return []
+
+
+def _record_postings(sheet_name, made, stamp):
+    """One record per company on the week, each with ITS journal. Replaced by company, so a
+    repeat run updates the record it made instead of adding a second."""
+    by_company = {r["company"]: r for r in _stored_postings(sheet_name)}
+    for m in made:
+        by_company[m["company"]] = {
+            "company": m["company"], "journal_entry": m["journal"], "lines": m["lines"], "gross": m["gross"],
+            "vat": m["vat"], "posted_on": str(stamp), "posted_by": frappe.session.user}
+    frappe.db.set_value(SHEET, sheet_name, "posting_results",
+                        json.dumps([by_company[c] for c in sorted(by_company)], indent=1), update_modified=False)
+
+
+def posting_results(sheet_name, week_ending=None, float_name=None):
+    """What has been posted for a week, by company, read fresh — nothing hidden.
+
+    Each company's journal with its CURRENT state (draft, submitted, cancelled or gone),
+    and the week's QuickBooks staging row with its state. ``companies_without_journal``
+    lists any company that has posted or ready lines but no journal recorded.
+    """
+    from vcl_finance.petty_cash import weeks
+    head = frappe.db.get_value(SHEET, sheet_name, ["week_ending", "float", "qbo_queue", "last_posting_error",
+                                                   "last_posting_on"], as_dict=True)
+    state = {0: "Draft", 1: "Submitted", 2: "Cancelled"}
+    rows = []
+    for r in _stored_postings(sheet_name):
+        j = r.get("journal_entry")
+        ds = frappe.db.get_value("Journal Entry", j, "docstatus") if j else None
+        rows.append(dict(r, journal_state=state.get(ds, "Missing") if j else "None",
+                         url=f"/app/journal-entry/{j}" if j else None))
+    lines = weeks.week_entries(sheet_name, fields=["company", "journal_entry", "cancelled", "status", "amount"],
+                               include_orphaned=True)
+    on_journal = {}
+    for e in lines:
+        if e.get("journal_entry"):
+            on_journal.setdefault(e.get("company") or R.COMPANY, set()).add(e["journal_entry"])
+    recorded = {r["company"]: r["journal_entry"] for r in rows}
+    hidden = sorted(c for c, js in on_journal.items() if not js <= {recorded.get(c)})
+    queue = _queue_status(str(head.week_ending), head.float) if head.qbo_queue or True else None
+    qbo = None
+    if queue:
+        qbo = {"row": queue["name"], "state": "Pushed" if queue["pushed"] else ("Approved" if queue.get("approved") else "Staged"),
+               "doc_number": queue.get("doc_number"), "qbo_id": queue.get("qbo_journal_id"),
+               "entries": queue.get("entry_count"), "amount": queue.get("total_out")}
+    posted = [e for e in _survey(str(head.week_ending), head.float)[1][P.POSTED]]
+    return {"companies": rows, "companies_without_record": hidden, "quickbooks": qbo,
+            "not_for_quickbooks": _not_for_qbo(posted),
+            "last_error": head.last_posting_error, "last_attempt": head.last_posting_on}
+
+
 @frappe.whitelist(methods=["POST"])
+@_retrying
 def post_erp(week_ending, float_name=None, line_mode="grouped", allow_partial=0, companies=None, **kwargs):
     """Raise the week's DRAFT ERPNext journal and link every entry to it. Never submits.
 
     ``companies`` limits the run to those companies; the others' lines are left as they are.
+
+    One draft journal per company, found again by its tag on a repeat, so two clicks, a
+    retry or two requests at once never make a second. All of it or none of it: if any
+    company's journal fails, nothing from this run is left behind and the week records
+    the error.
     """
     P._guard()
     float_name = float_name or kwargs.get("float")
     sheet = _sheet(week_ending, float_name)
+    _lock_week(sheet["name"])
+    sheet = _sheet(week_ending, float_name)             # re-read under the lock
     rows, b = _survey(week_ending, float_name)
     rows, b = _only_companies(rows, b, companies)
     _require_gates(sheet, rows, b, allow_partial)
     if not b[P.READY]:
+        if b[P.POSTED] and cint(frappe.db.get_value(SHEET, sheet["name"], "native_lines")):
+            # A repeat request on a week that is already posted: say what exists, make nothing.
+            out = preview(week_ending, float_name, line_mode)
+            out["created"], out["already_posted"] = [], True
+            return out
         frappe.throw(_("Nothing is ready to post in this week."))
     if line_mode not in ("grouped", "each"):
         frappe.throw(_("Unknown line mode {0}.").format(line_mode))
@@ -318,6 +418,32 @@ def post_erp(week_ending, float_name=None, line_mode="grouped", allow_partial=0,
 
     made = []
     stamp = now_datetime()
+    frappe.db.savepoint("pc_post_erp")
+    try:
+        _post_companies(by_company, b, float_name, week_ending, line_mode, made, stamp)
+        if len(made) == 1:
+            frappe.db.set_value(SHEET, sheet["name"], "journal_entry", made[0]["journal"], update_modified=False)
+        _record_postings(sheet["name"], made, stamp)
+        frappe.db.set_value(SHEET, sheet["name"], {"last_posting_error": None, "last_posting_on": stamp},
+                            update_modified=False)
+    except Exception as e:      # noqa: BLE001
+        if (isinstance(e, (frappe.QueryDeadlockError, frappe.QueryTimeoutError))
+                or frappe.db.is_deadlocked(e) or frappe.db.is_timedout(e)):
+            raise                                   # another session got in first: retried from the top
+        # Nothing from this run stays: not one company's journal without the other's.
+        frappe.db.rollback(save_point="pc_post_erp")
+        frappe.db.set_value(SHEET, sheet["name"], {
+            "last_posting_error": (str(e) or type(e).__name__)[:500], "last_posting_on": stamp},
+            update_modified=False)
+        frappe.db.commit()
+        raise
+    frappe.db.commit()
+    out = preview(week_ending, float_name, line_mode)
+    out["created"] = made
+    return out
+
+
+def _post_companies(by_company, b, float_name, week_ending, line_mode, made, stamp):
     for company, new_lines in sorted(by_company.items()):
         cash = P.cash_account(company, float_name)
         vat_acct = C.VAT_ACCOUNT.get(company)
@@ -358,15 +484,9 @@ def post_erp(week_ending, float_name=None, line_mode="grouped", allow_partial=0,
         made.append({"journal": je.name, "company": company, "lines": len(lines), "journal_rows": len(rows_),
                      "gross": totals["gross"], "vat": totals["vat"], "url": f"/app/journal-entry/{je.name}"})
 
-    if len(made) == 1:
-        frappe.db.set_value(SHEET, sheet["name"], "journal_entry", made[0]["journal"], update_modified=False)
-    frappe.db.commit()
-    out = preview(week_ending, float_name, line_mode)
-    out["created"] = made
-    return out
-
 
 @frappe.whitelist(methods=["POST"])
+@_retrying
 def stage_qbo(week_ending, float_name=None, **kwargs):
     """Put the week's tax-inclusive QuickBooks Expense in the queue, UNAPPROVED.
 
@@ -377,6 +497,8 @@ def stage_qbo(week_ending, float_name=None, **kwargs):
     Q._guard()
     float_name = float_name or kwargs.get("float")
     sheet = _sheet(week_ending, float_name)
+    _lock_week(sheet["name"])
+    sheet = _sheet(week_ending, float_name)             # re-read under the lock
     if sheet["status"] != "Approved":
         frappe.throw(_("The week must be approved before it goes to QuickBooks."))
     rows, b = _survey(week_ending, float_name)
@@ -426,5 +548,59 @@ def stage_qbo(week_ending, float_name=None, **kwargs):
     frappe.db.set_value(SHEET, sheet["name"], "qbo_queue", row.name, update_modified=False)
     frappe.db.commit()
     return {"queue_row": row.name, "doc_number": doc_number, "lines": len(groups), "entries": len(staged),
+            "not_for_quickbooks": _not_for_qbo(b[P.POSTED]),
+            "held": [{"reason": k, "lines": len(v), "entries": [x["name"] for x in v]} for k, v in blocked.items()],
             "amount": row.total_out, "blocked": row.block_reason, "approved": False, "payload": payload,
             "warning": Q.overlap_warning(week_ending, float_name)["message"], "runner": RUNNER}
+
+
+def discard_drafts(sheet_name):
+    """Controlled regeneration: take a week's DRAFT posting apart so its lines can change.
+
+    Called by reopening the week, under the week lock. Two states, two ways back:
+
+    * a **submitted** journal is in the ledger. Refused: it is cancelled or reversed in
+      ERPNext, by whoever owns that decision.
+    * a QuickBooks expense that has been **pushed** is in QuickBooks. Refused: it is
+      changed there.
+    * otherwise every company's **draft** journal is deleted, the unpushed QuickBooks
+      staging row is deleted, and the links on the lines, on the week and in the
+      per-company posting record are cleared. Approving and posting again builds fresh
+      drafts from the lines as they then are.
+
+    Returns what was discarded.
+    """
+    from vcl_finance.petty_cash import weeks
+    head = frappe.db.get_value(SHEET, sheet_name, ["week_ending", "float"], as_dict=True)
+    lines = weeks.week_entries(sheet_name, fields=["name", "journal_entry", "qbo_queue"], include_orphaned=True)
+    journals = sorted({e["journal_entry"] for e in lines if e.get("journal_entry")}
+                      | {r["journal_entry"] for r in _stored_postings(sheet_name) if r.get("journal_entry")})
+    state = {j: frappe.db.get_value("Journal Entry", j, "docstatus") for j in journals}
+    submitted = sorted(j for j, ds in state.items() if ds == 1)
+    if submitted:
+        frappe.throw(
+            _("This week is on submitted journal {0}. Cancel or reverse it in ERPNext before reopening the week.")
+            .format(", ".join(submitted)), title=_("Journal is submitted"))
+    queue_name = Q._row_name(str(head.week_ending), head.float)
+    queue = frappe.db.get_value(Q.QUEUE, queue_name, ["name", "qbo_journal_id"], as_dict=True) if frappe.db.exists(Q.QUEUE, queue_name) else None
+    if queue and queue.qbo_journal_id:
+        frappe.throw(
+            _("This week is already in QuickBooks as {0}. Change it there; the week cannot be reopened here.")
+            .format(queue.qbo_journal_id), title=_("Already in QuickBooks"))
+
+    drafts = sorted(j for j, ds in state.items() if ds == 0)
+    for e in lines:
+        if e.get("journal_entry") or e.get("qbo_queue"):
+            frappe.db.set_value("Petty Cash Entry", e["name"],
+                                {"journal_entry": None, "posted_on": None, "qbo_queue": None}, update_modified=False)
+    for j in drafts:
+        frappe.delete_doc("Journal Entry", j, force=1, ignore_permissions=True)
+    if queue:
+        frappe.delete_doc(Q.QUEUE, queue.name, force=1, ignore_permissions=True)
+    frappe.db.set_value(SHEET, sheet_name, {"journal_entry": None, "qbo_queue": None, "posting_results": None},
+                        update_modified=False)
+    if drafts or queue:
+        frappe.get_doc(SHEET, sheet_name).add_comment("Info", _(
+            "Week reopened: discarded draft journal(s) {0}{1}. Approve and post again to rebuild them.").format(
+                ", ".join(drafts) or "none", _(" and the QuickBooks staging row {0}").format(queue.name) if queue else ""))
+    return {"journals": drafts, "quickbooks_row": queue.name if queue else None}

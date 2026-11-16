@@ -4,7 +4,7 @@
 
 {% block head_include %}
 <meta name="csrf_token" content="{{ frappe.session.csrf_token }}">
-<link rel="stylesheet" href="/assets/vcl_finance/css/petty_cash_entry.css">
+<link rel="stylesheet" href="/assets/vcl_finance/css/petty_cash_entry.css?v=20261116">
 {% endblock %}
 
 {% block page_content %}
@@ -21,16 +21,20 @@
   {% else %}
     <p class="meta">No open weeks yet.</p>
   {% endif %}
+  {% if auto_weeks %}
+  <a class="newlink btn btn-primary" href="/petty-cash/entry">Add an entry for this week</a>
+  {% else %}
   <a class="newlink btn btn-primary" href="/petty-cash/new">＋ Start a new week</a>
+  {% endif %}
 </div>
 {% else %}
 <div class="page-narrow">
   <main class="wz" id="wz" data-sheet="{{ doc.name }}" data-status="{{ doc.status }}">
     <header class="wz-top">
       <a class="wz-back" href="/petty-cash/sheet?name={{ doc.name }}" title="Back to grid">‹</a>
-      <div class="wz-wk">Wk{{ doc.week_no }} · {{ doc.week_ending }} · {{ doc.float }}</div>
+      <div class="wz-wk">Wk{{ doc.week_no }} · {{ week_label }} · {{ doc.float }}</div>
       <div class="wz-bal-wrap">
-        <div class="wz-bal-lbl">Cash remaining</div>
+        <div class="wz-bal-lbl">{{ summary.balance_label or "Cash remaining" }}</div>
         <div class="wz-bal" id="wzBal">{{ "{:,.0f}".format(summary.expected_close or 0) }}</div>
       </div>
     </header>
@@ -169,5 +173,5 @@
 {% endblock %}
 
 {% block script %}
-{% if sheet is not none %}<script src="/assets/vcl_finance/js/petty_cash_entry.js"></script>{% endif %}
+{% if sheet is not none %}<script src="/assets/vcl_finance/js/petty_cash_entry.js?v=20261116"></script>{% endif %}
 {% endblock %}

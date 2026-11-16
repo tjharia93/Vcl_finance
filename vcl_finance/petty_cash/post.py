@@ -64,7 +64,13 @@ def cash_account(company, float_name):
     cash account is the one failure here that produces a balanced, plausible,
     wrong journal.
     """
-    return FLOAT_CASH_ACCOUNT.get((company or R.COMPANY, float_name))
+    account = FLOAT_CASH_ACCOUNT.get((company or R.COMPANY, float_name))
+    if account is None and float_name and float_name == frappe.conf.get("petty_cash_trial_float"):
+        # A DEV-ONLY float for replaying a real week side by side with itself. It exists
+        # only where the site config names it (never on live) and uses the Cash float's
+        # accounts, so a replayed week posts to the same accounts as the week it copies.
+        account = FLOAT_CASH_ACCOUNT.get((company or R.COMPANY, "Cash"))
+    return account
 
 # A line's own state in the run.
 POSTED = "posted"      # already in a journal
@@ -138,6 +144,10 @@ def sheet_filters(week_ending, float_name):
     """Which entries belong to the sheet for this week and float.
 
     The sheet is the posting unit: it is what the custodian closed and Finance approved.
+    KEPT FOR CALLERS OUTSIDE THIS APP ONLY. It cannot see a native entry (one linked
+    by ``week_sheet``), so nothing in vcl_finance uses it any more: every reader goes
+    through ``weeks.week_entries`` / ``weeks.entries_for_week``.
+
     Matching on the entry's own week_ending missed every May and June sheet, which were
     saved on Fridays, Sundays and Mondays while each entry is filed into its Sun-Sat week
     (PCS-2026-00014, stored 07/06, has 48 lines in the week ending 06/06 and 13 in 13/06,
@@ -150,15 +160,20 @@ def sheet_filters(week_ending, float_name):
     return {"origin_sheet": name}, name
 
 
+_ENTRY_FIELDS = ["name", "txn_date", "float", "company", "source_type", "source_key",
+                 "recipient", "notes", "memo", "amount", "cash_in", "status", "cancelled",
+                 "posting_account", "journal_entry", "posted_on", "exclude_from_posting", "exclude_reason"]
+
+
 def _entries(week_ending, float_name):
-    filters = {"week_ending": week_ending}
     if float_name:
-        filters = sheet_filters(week_ending, float_name)[0]
+        # The one shared lookup: a sheet's mirrored AND native lines, each once.
+        from vcl_finance.petty_cash import weeks
+        return weeks.entries_for_week(week_ending, float_name, fields=_ENTRY_FIELDS,
+                                      include_orphaned=True)[0]
     return frappe.get_all(
-        "Petty Cash Entry", filters=filters,
-        fields=["name", "txn_date", "float", "company", "source_type", "source_key",
-                "recipient", "notes", "memo", "amount", "cash_in", "status", "cancelled",
-                "posting_account", "journal_entry", "posted_on", "exclude_from_posting", "exclude_reason"],
+        "Petty Cash Entry", filters={"week_ending": week_ending},
+        fields=_ENTRY_FIELDS,
         order_by="txn_date asc, creation asc", limit_page_length=0,
     )
 
@@ -229,6 +244,17 @@ def preview_week(week_ending, float_name=None, **kwargs):
     }
 
 
+def _refuse_native(week_ending, float_name):
+    """This older posting path is not extended to weeks that keep their lines as entries.
+    Those are posted with the week posting (``weekpost``), which records every company's
+    journal and reads the week's lines through the one shared lookup."""
+    from vcl_finance.petty_cash import weeks
+    name = weeks.sheet_name_for(week_ending, float_name) if float_name else None
+    if name and frappe.utils.cint(frappe.db.get_value("Petty Cash Sheet", name, "native_lines")):
+        frappe.throw(_("This week keeps its lines as entries. Post it from the week posting screen."),
+                     title=_("Use the week posting"))
+
+
 def _open_journal(tag_base, company, posting_date):
     """The draft journal for this week, or the next free tag after a submitted one."""
     seq, tag = 1, tag_base
@@ -254,6 +280,7 @@ def post_week(week_ending, float_name=None, only=None, **kwargs):
     """Post everything that is ready. Creates DRAFT journals only."""
     _guard()
     float_name = float_name or kwargs.get("float")
+    _refuse_native(week_ending, float_name)
     _rows, b = _survey(week_ending, float_name)
 
     # Posting one named line rather than the whole week. The line still lands in

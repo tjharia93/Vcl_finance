@@ -47,6 +47,8 @@ APPROVAL_FIELDS = (
 class PettyCashEntry(Document):
     def before_save(self):
         self.ensure_origin_row()
+        self.validate_week_link()
+        self.lock_native_week()
         self.derive_week_ending()
         self.validate_withdrawal()
         self.sync_void_stamps()
@@ -69,6 +71,125 @@ class PettyCashEntry(Document):
             self.origin_row = self.name
             if not self.sync_state:
                 self.sync_state = "Native"
+
+    def validate_week_link(self):
+        """Which week this entry belongs to — one link, one authority.
+
+        An entry is exactly one of: MIRRORED (``origin_sheet`` set — it belongs to that
+        sheet, whatever its date says), NATIVE (``week_sheet`` set), or UNLINKED
+        (neither — none exist, and no new one is accepted). See ``weeks.py``.
+
+        For a native entry ``week_sheet`` is the single authority:
+          - the sheet must exist and keep its lines as entries;
+          - the date is required and must fall in that sheet's Sun–Sat week;
+          - ``float`` is the sheet's, copied here, never typed;
+          - ``company`` only DEFAULTS from the sheet. It is a decision made on the line
+            (one tin serves four companies), so a value already set is left alone;
+          - the link is not editable. Changing a line's week goes through the
+            controlled move, which sets ``flags.controlled_move``.
+        """
+        if self.origin_sheet and self.week_sheet:
+            frappe.throw(
+                _("An entry is linked to its week either by the sheet row it was copied from "
+                  "or directly, never both."),
+                title=_("Two week links"))
+
+        if not self.week_sheet:
+            if self.is_new() and not self.origin_sheet and not self.flags.allow_unlinked:
+                frappe.throw(
+                    _("A petty cash entry must belong to a week. Key it on a week's sheet."),
+                    title=_("No week"))
+            return
+
+        sheet = frappe.db.get_value(
+            "Petty Cash Sheet", self.week_sheet,
+            ["name", "week_ending", "float", "company", "native_lines", "docstatus"], as_dict=True)
+        if not sheet or sheet.docstatus == 2:
+            frappe.throw(_("Week sheet {0} does not exist.").format(self.week_sheet))
+        if not sheet.native_lines:
+            frappe.throw(
+                _("Week sheet {0} keeps its lines as rows on the sheet. A line cannot be "
+                  "added to it as an entry.").format(sheet.name),
+                title=_("Week keeps rows"))
+
+        if not self.is_new() and not self.flags.controlled_move:
+            was = frappe.db.get_value("Petty Cash Entry", self.name, "week_sheet")
+            if was and was != self.week_sheet:
+                frappe.throw(
+                    _("A line is moved to another week with Move to week, not by editing "
+                      "its week."),
+                    title=_("Use Move to week"))
+
+        if not self.txn_date:
+            frappe.throw(_("A date is required. The week a line belongs to is checked against it."))
+        if week_saturday(self.txn_date) != week_saturday(sheet.week_ending):
+            frappe.throw(
+                _("{0} is not in the week of sheet {1} (week ending {2}). Move the line to "
+                  "the right week instead of changing its date.").format(
+                    frappe.format(self.txn_date, {"fieldtype": "Date"}), sheet.name,
+                    frappe.format(sheet.week_ending, {"fieldtype": "Date"})),
+                title=_("Date is outside the week"))
+
+        if self.float and self.float != sheet.float and not self.is_new():
+            frappe.throw(
+                _("This line belongs to the {0} float through its week sheet. The float is "
+                  "not changed on the line.").format(sheet.float),
+                title=_("Float comes from the week"))
+        self.float = sheet.float
+        if not self.company:
+            self.company = sheet.company
+        self.sync_state = "Native"
+
+    def lock_native_week(self):
+        """Native lines only: take the week's lock, then apply the change rules.
+
+        Whatever saves a native entry — a keying action, the desk form, a REST call —
+        this runs. It takes the row lock on the week sheet (and on the week the line
+        is leaving, in name order) BEFORE anything is judged, so a change and a
+        close/approve can never interleave. Then ``native.enforce_change_rules``
+        decides, from who is asking, what changed, the line's state and the week's
+        state, whether the change is allowed and what it does to the finance tick.
+
+        Remembered for ``on_update``: which kinds of field changed, and the week the
+        line was on before, so both weeks' stored totals are refreshed.
+        """
+        self.flags.native_groups = set()
+        self.flags.native_was_on = None
+        if not self.week_sheet:
+            return
+        from vcl_finance.petty_cash import native
+
+        before = None if self.is_new() else self.get_doc_before_save()
+        groups = native.changed_groups(self, before)
+        if not groups:
+            return
+        if before and before.get("week_sheet") and before.get("week_sheet") != self.week_sheet:
+            self.flags.native_was_on = before.get("week_sheet")
+        locked = native.lock_sheets(self.week_sheet, self.flags.native_was_on)
+        native.enforce_change_rules(self, before, groups, locked)
+        # The rules may themselves clear the tick or raise the changed-after-sign-off flag.
+        self.flags.native_groups = native.changed_groups(self, before)
+
+    def on_update(self):
+        """Native lines only: the week's stored totals and revision follow the entry,
+        and a change Finance made to a reviewed line is written down in plain words."""
+        groups = self.flags.get("native_groups") or set()
+        if not self.week_sheet or not groups:
+            return
+        from vcl_finance.petty_cash import native
+        cash = bool(groups & native.CASH_GROUPS)
+        native.refresh_sheet(self.week_sheet, cash_changed=cash, because=self)
+        if self.flags.get("native_was_on"):
+            native.refresh_sheet(self.flags.native_was_on, cash_changed=True, because=self)
+        for note in (self.flags.get("audit_notes") or []):
+            self.add_comment("Info", note)
+        self.flags.audit_notes = []
+
+    def after_delete(self):
+        if self.week_sheet:
+            from vcl_finance.petty_cash import native
+            native.lock_sheet(self.week_sheet)
+            native.refresh_sheet(self.week_sheet)
 
     def derive_week_ending(self):
         """``week_ending`` is derived, never typed. PC-001.

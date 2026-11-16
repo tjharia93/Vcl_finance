@@ -10,7 +10,11 @@
       <div class="meta">{{ sheets|length }} weeks recorded</div>
     </div>
     <div class="page-actions">
+      {% if auto_weeks %}
+      <a class="btn btn-primary" href="/petty-cash/entry">+ Add entry</a>
+      {% else %}
       <a class="btn btn-primary" href="/petty-cash/new">+ New Weekly Sheet</a>
+      {% endif %}
     </div>
   </div>
 
@@ -61,7 +65,7 @@
   <div class="empty-state">
     <h2>No sheets yet</h2>
     <p>Start your first weekly petty cash sheet — pick the week-ending Friday and your opening balance.</p>
-    <a class="btn btn-primary" href="/petty-cash/new" style="margin-top:16px;display:inline-flex">+ New Weekly Sheet</a>
+    <a class="btn btn-primary" href="{{ '/petty-cash/entry' if auto_weeks else '/petty-cash/new' }}" style="margin-top:16px;display:inline-flex">{{ '+ Add entry' if auto_weeks else '+ New Weekly Sheet' }}</a>
   </div>
   {% endif %}
 </div>

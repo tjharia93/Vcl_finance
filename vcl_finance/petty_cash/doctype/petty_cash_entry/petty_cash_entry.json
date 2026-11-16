@@ -13,9 +13,12 @@
   "week_ending",
   "float",
   "company",
+  "week_sheet",
   "col_entry_a",
   "source_type",
   "source_key",
+  "entry_kind",
+  "voucher_no",
   "category",
   "col_entry_b",
   "recipient",
@@ -28,6 +31,9 @@
   "pc_received",
   "etr_received",
   "etr_cu_invoice_no",
+  "reconciled",
+  "reconciled_by",
+  "reconciled_on",
   "section_approval",
   "status",
   "approved_by",
@@ -578,6 +584,49 @@
    "read_only": 1,
    "hidden": 1,
    "description": "Treatment and amount the stored VAT was worked out from. If either changes later the VAT is flagged as out of date."
+  },
+  {
+   "fieldname": "week_sheet",
+   "fieldtype": "Link",
+   "options": "Petty Cash Sheet",
+   "label": "Week sheet",
+   "search_index": 1,
+   "description": "The week this line belongs to. Set only on native entries, where it is the single authority for the week; date, float and company must agree with it."
+  },
+  {
+   "fieldname": "entry_kind",
+   "fieldtype": "Select",
+   "label": "Keyed as",
+   "options": "\nvoucher\nwage\ncommission\npiecework\novertime\nloan\nbike\nforklift\nparking",
+   "description": "What the custodian keyed this line as. Native entries only."
+  },
+  {
+   "fieldname": "voucher_no",
+   "fieldtype": "Data",
+   "label": "Slip no."
+  },
+  {
+   "fieldname": "reconciled",
+   "fieldtype": "Check",
+   "label": "Finance tick",
+   "default": "0",
+   "permlevel": 1,
+   "description": "Finance has matched this line to its physical receipt. Native entries only; a mirrored entry carries the tick on its sheet row."
+  },
+  {
+   "fieldname": "reconciled_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Ticked by",
+   "read_only": 1,
+   "permlevel": 1
+  },
+  {
+   "fieldname": "reconciled_on",
+   "fieldtype": "Datetime",
+   "label": "Ticked on",
+   "read_only": 1,
+   "permlevel": 1
   }
  ],
  "index_web_pages_for_search": 0,

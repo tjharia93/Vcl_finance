@@ -131,8 +131,31 @@ class PettyCashSheet(Document):
     # Lifecycle hooks
     # ------------------------------------------------------------------
 
+    def load_from_db(self):
+        """A native week keeps no rows. Whenever one is loaded, its rows are rebuilt in
+        memory from its entries, so every reader sees the week the way it sees any other."""
+        super().load_from_db()
+        self.flags.hydrated = False
+        if cint(self.get("native_lines")):
+            from vcl_finance.petty_cash import native
+            native.hydrate(self)
+
+    def save(self, *args, **kwargs):
+        """...and whenever one is saved, those in-memory rows are taken out first (and a
+        changed or missing one refuses the save), then put back for whoever reads next."""
+        if cint(self.get("native_lines")) and not self.is_new():
+            from vcl_finance.petty_cash import native
+            native.strip_rows(self)
+            out = super().save(*args, **kwargs)
+            native.hydrate(self)
+            return out
+        return super().save(*args, **kwargs)
+
     def validate(self):
         self.guard_locked_write()
+        # Before anything pads or sorts the rows: the switch is judged on what the
+        # client actually sent.
+        self.guard_native_switch()
         # MUST run before validate_week_ending / ensure_grid / derive_parking_days /
         # the autosorts / compute_totals: those steps mutate the child rows
         # themselves, so the incoming payload has to be compared against the DB
@@ -147,7 +170,9 @@ class PettyCashSheet(Document):
         self.validate_week_ending()
         self.validate_unique_float()
         self.derive_week_no()
-        self.ensure_grid()
+        if not cint(self.native_lines):
+            # A native week holds no rows at all, so there is no grid to pad.
+            self.ensure_grid()
         self.derive_parking_days()
         self.autosort_vouchers_by_date()
         self.autosort_parking_by_date()
@@ -219,6 +244,53 @@ class PettyCashSheet(Document):
         for new_idx, v in enumerate(self.vouchers, start=1):
             v.row_idx = new_idx
             v.idx = new_idx
+
+    def guard_native_switch(self):
+        """The rules for ``native_lines`` — the switch between the two line models.
+
+        Off (default): lines are rows on this sheet, mirrored to entries on save.
+        On: every line is its own Petty Cash Entry linked by ``week_sheet`` and this
+        sheet is only the week header.
+
+        1. It can be turned ON only while the sheet has no real rows.
+        2. It can be turned OFF only while the week has no native entries.
+        3. While it is on the mirror does nothing (see ``mirror.on_sheet_update``).
+        4. While it is on no real row may be added to the old tables.
+
+        Rules 1 and 4 are the same test — "on, and a real row is present" — reported
+        with the message that fits. Blank scaffolding rows do not count: the same
+        ``is_real_row`` the mirror uses decides what a real row is.
+        """
+        from vcl_finance.petty_cash.mirror import TABLE_MAP, is_real_row
+        from vcl_finance.petty_cash import weeks
+
+        now = cint(self.native_lines)
+        was = 0 if self.is_new() else cint(frappe.db.get_value("Petty Cash Sheet", self.name, "native_lines"))
+        self.flags.native_switched = (now != was)
+
+        if now:
+            real = sum(1 for table, spec in TABLE_MAP.items()
+                       for row in (self.get(table) or [])
+                       if is_real_row(row, spec["amount_field"]))
+            if real and not was:
+                frappe.throw(
+                    _("This sheet already has {0} line(s) keyed as rows. \"Lines are entries\" "
+                      "can only be turned on for a week with no rows.").format(real),
+                    title=_("Week already has rows"))
+            if real:
+                frappe.throw(
+                    _("This week keeps its lines as entries, so a line cannot be added as a row "
+                      "on the sheet ({0} found). Key it as an entry instead.").format(real),
+                    title=_("Rows are not used on this week"))
+        elif was and not self.flags.get("converting_to_rows"):
+            # (The fallback tool turns the switch off and writes the rows in the same save,
+            # re-linking each entry to its row straight after; it says so with this flag.)
+            native = weeks.native_entry_count(self.name)
+            if native:
+                frappe.throw(
+                    _("This week has {0} line(s) kept as entries. \"Lines are entries\" cannot be "
+                      "turned off while they exist.").format(native),
+                    title=_("Week already has entries"))
 
     def guard_locked_write(self):
         """ORM-layer lock: a Closed/Submitted/Approved week may only be saved by an
@@ -600,6 +672,8 @@ class PettyCashSheet(Document):
     # ------------------------------------------------------------------
 
     def compute_totals(self):
+        if cint(self.native_lines):
+            return self.compute_totals_from_entries()
         # Cancelled (voided) rows stay on the sheet for audit but never count
         # toward any total, expected close, variance, or posting.
         cat = {c: 0.0 for c in CATEGORY_CODES}
@@ -623,6 +697,27 @@ class PettyCashSheet(Document):
         loans_out = sum((l.amount_issued or 0) for l in self.loan_entries if not l.cancelled)
 
         self.total_out = voucher_out + parking_out + misc_out + wages_out + loans_out
+        self.total_in = total_in
+        self.expected_close = (self.opening_balance or 0) - self.total_out + self.total_in
+        self.variance = (self.cash_count_end or 0) - self.expected_close
+
+
+    def compute_totals_from_entries(self):
+        """Totals for a native week: summed from its entries, never adjusted.
+
+        The stored totals are a copy for lists and prints. They are recomputed from
+        the entries on every save of the sheet and on every change to a line, and are
+        never evidence on their own — close and approve recompute again.
+        """
+        total_out = total_in = 0.0
+        if not self.is_new():
+            from vcl_finance.petty_cash import weeks
+            for e in weeks.live_amounts_locked(self.name):
+                if e["cash_in"]:
+                    total_in += flt(e["amount"])
+                else:
+                    total_out += flt(e["amount"])
+        self.total_out = total_out
         self.total_in = total_in
         self.expected_close = (self.opening_balance or 0) - self.total_out + self.total_in
         self.variance = (self.cash_count_end or 0) - self.expected_close
@@ -690,6 +785,13 @@ def _prior_close(float_name, week_ending, exclude=None):
         return None
     prev = frappe.get_doc("Petty Cash Sheet", rows[0]["name"])
     bal, basis = _closing_cash(prev)
+    if cint(prev.get("native_lines")):
+        # A week kept as entries runs two separate chains. The BOOK opening of the next
+        # week carries the book's own close, never the physical count: taking the count
+        # would overwrite the book balance and silently absorb the difference between the
+        # book and the tin. The count is carried on its own, as the next week's opening
+        # physical count (native.ensure_opening_count).
+        bal, basis = round(prev.expected_close or 0, 2), "expected (book)"
     return {
         "balance": bal,
         "basis": basis,
@@ -803,6 +905,57 @@ def summary(name):
     }
 
 
+def auto_weeks_on():
+    """Are weeks opened by the system (site config ``petty_cash_native_from`` is set)?"""
+    return bool(frappe.conf.get("petty_cash_native_from"))
+
+
+def kept_as_entries(week_ending, float_name):
+    """Should a NEW week for this date and float keep its lines as entries?
+
+    Controlled by site config, so it is off until switched on for a site:
+    ``petty_cash_native_from``   a date; weeks ending on or after it qualify.
+    ``petty_cash_native_floats`` the floats it applies to (default: Cash only, because
+                                 the Hauz-Pay statement import still writes rows).
+    """
+    start = frappe.conf.get("petty_cash_native_from")
+    if not start:
+        return False
+    floats = frappe.conf.get("petty_cash_native_floats") or ["Cash"]
+    return (float_name or "Cash") in floats and week_saturday(week_ending) >= getdate(start)
+
+
+def open_week(for_date=None, float_name="Cash", custodian_name="Shiro", authorised_float=50000):
+    """The sheet for the week containing ``for_date`` (today when not given), opened if
+    it does not exist yet. Nobody opens a week by hand: the date decides the week.
+
+    Two people landing on a new week at the same moment must not open it twice, so the
+    check and the create happen under a named database lock, the check is a locking
+    read (it sees what is committed now, not what this request saw earlier), and the
+    new sheet is committed before the lock is released.
+    """
+    we = week_saturday(for_date or date.today())
+    float_name = float_name or "Cash"
+    find = {"week_ending": we, "float": float_name, "docstatus": ("<", 2)}
+    name = frappe.db.get_value("Petty Cash Sheet", find, "name")
+    if name:
+        return name
+    key = f"pc-open-week-{float_name}-{we}"
+    if not frappe.db.sql("select get_lock(%s, 15)", (key,))[0][0]:
+        frappe.throw(_("The week is being opened by someone else. Please try again."))
+    try:
+        rows = frappe.db.sql(
+            "select name from `tabPetty Cash Sheet` where week_ending = %s and `float` = %s and docstatus < 2 for update",
+            (we, float_name))
+        if rows:
+            return rows[0][0]
+        name = create_for_week(we, custodian_name, 0, authorised_float, float_name)
+        frappe.db.commit()
+        return name
+    finally:
+        frappe.db.sql("select release_lock(%s)", (key,))
+
+
 @frappe.whitelist()
 def create_for_week(week_ending, custodian_name="Shiro", opening_balance=0, authorised_float=50000, float_name="Cash"):
     """Convenience endpoint: create a new sheet for the given Saturday + float, or return existing.
@@ -823,6 +976,10 @@ def create_for_week(week_ending, custodian_name="Shiro", opening_balance=0, auth
     doc.custodian_name = custodian_name or "Shiro"
     doc.authorised_float = float(authorised_float or 50000)
     doc.status = "Draft"
+    # A week the system opens from ``petty_cash_native_from`` onward keeps its lines as
+    # entries from the start, so nobody has to open the sheet and tick the switch.
+    if kept_as_entries(we, float_name):
+        doc.native_lines = 1
 
     # Opening balance: always carry forward the prior week's close for this float
     # (negative carried as-is — real signal, never clamped). The passed

@@ -7,6 +7,277 @@
 {% endblock %}
 
 {% block page_content %}
+{% if native %}
+<div class="page" data-pc-native="1" data-pc-sheet="{{ doc.name }}" data-pc-revision="{{ revision }}">
+  <div class="page-head">
+    <div>
+      <h1>Week {{ doc.week_no }} — Ending {% set _we = doc.week_ending|string %}{{ _we[8:10] }}/{{ _we[5:7] }}/{{ _we[0:4] }} <span style="font-size:0.6em;color:#666">[{{ doc.float or "Cash" }}]</span></h1>
+      <div class="meta">
+        Custodian: <strong>{{ doc.custodian_name }}</strong>
+        · Status: <span class="status-pill status-{{ doc.status }}">{{ doc.status }}</span>
+        · Read-only
+      </div>
+    </div>
+    <div class="page-actions">
+      {% if doc.status == "Draft" or (can_manage and doc.status == "Closed") %}<a href="/petty-cash/entry?name={{ doc.name|urlencode }}" class="btn btn-primary">Add entry</a>{% endif %}
+      <a href="/petty-cash/print?name={{ doc.name|urlencode }}&copies=1" target="_blank" class="btn btn-ghost">Print Single</a>
+      <a href="/petty-cash/print?name={{ doc.name|urlencode }}&copies=3" target="_blank" class="btn btn-ghost">Print 3-Sheet</a>
+      <a href="/petty-cash/" class="btn btn-ghost">Back to Sheets</a>
+    </div>
+  </div>
+
+  <div class="pc-native-note" style="margin:12px 0;padding:10px 14px;border:1px solid #D5DAE6;background:#F3F5FA;color:#14264A">
+    <strong>Manage transactions from the entry page.</strong>
+    Add, change and cancel lines on the entry page. Record the supplied balance, and close, acknowledge and approve the week, on this page.
+  </div>
+
+  {% macro kes(v) %}{% if v is none %}—{% elif v < 0 %}({{ "{:,.2f}".format(-v) }}){% else %}{{ "{:,.2f}".format(v) }}{% endif %}{% endmacro %}
+
+  <div class="summary-bar">
+    <div class="summary-cell"><div class="label">Cash paid out</div><div class="value">{{ kes(doc.total_out or 0) }}</div></div>
+    <div class="summary-cell green"><div class="label">Cash received</div><div class="value">{{ kes(doc.total_in or 0) }}</div></div>
+  </div>
+
+  {% macro parts(rows) %}
+    {% if rows %}
+    <table style="width:100%;margin:4px 0 8px;font-size:.95em"><thead><tr style="color:#6B7280"><td>Where it is held</td><td style="text-align:right">Balance supplied</td><td style="text-align:right">Belongs to this float</td></tr></thead><tbody>
+      {% for r in rows %}
+      <tr><td>{{ r.kind }}{% if r.label %} <span style="color:#6B7280">({{ r.label }})</span>{% endif %}</td><td style="text-align:right">{{ kes(r.balance) }}</td><td style="text-align:right">{{ kes(r.float_amount) }}</td></tr>
+      {% endfor %}
+    </tbody></table>
+    {% endif %}
+  {% endmacro %}
+
+  <div class="pc-cash" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:12px;margin:14px 0">
+    <div style="border:1px solid #D5DAE6;background:#fff;padding:12px 14px">
+      <div style="font-weight:600;margin-bottom:6px">Book cash balance</div>
+      <div style="color:#6B7280;font-size:.92em;margin-bottom:8px">What the records say. Opening balance less paid plus received.</div>
+      <table style="width:100%"><tbody>
+        <tr><td>Book opening balance</td><td style="text-align:right">{{ kes(cash.book_opening) }}</td></tr>
+        <tr><td>Paid out</td><td style="text-align:right">{{ kes(-(doc.total_out or 0)) }}</td></tr>
+        <tr><td>Received</td><td style="text-align:right">{{ kes(doc.total_in or 0) }}</td></tr>
+        <tr style="font-weight:600;border-top:1px solid #D5DAE6"><td>Book cash balance</td><td style="text-align:right">{{ kes(cash.book_cash_balance) }}</td></tr>
+      </tbody></table>
+    </div>
+    <div style="border:1px solid #D5DAE6;background:#fff;padding:12px 14px">
+      <div style="font-weight:600;margin-bottom:6px">Actual balance, this week</div>
+      <div style="color:#6B7280;font-size:.92em;margin-bottom:8px">The float's balance as supplied (cash in hand and M-Pesa). Checked for this week only.</div>
+      {% if cash.opening_actual_balance is none %}
+        <div style="color:#8A4B00">No opening actual balance recorded yet. The week cannot be closed until it is.</div>
+      {% else %}
+      <table style="width:100%"><tbody>
+        <tr><td>Opening actual balance <span style="color:#6B7280">({{ "last week's Saturday closing balance" if cash.opening_actual_source != "Supplied" else "from the supplied Monday opening balance" }})</span></td><td style="text-align:right;vertical-align:top">{{ kes(cash.opening_actual_balance) }}</td></tr>
+        <tr><td>Paid out</td><td style="text-align:right">{{ kes(-(doc.total_out or 0)) }}</td></tr>
+        <tr><td>Received</td><td style="text-align:right">{{ kes(doc.total_in or 0) }}</td></tr>
+        <tr style="border-top:1px solid #D5DAE6"><td>Expected actual balance at week end</td><td style="text-align:right">{{ kes(cash.expected_actual_close) }}</td></tr>
+      </tbody></table>
+      {% if cash.counted %}
+      <div style="margin-top:10px;font-weight:600">Balance supplied</div>
+      <div style="color:#6B7280;font-size:.92em">As at the opening of {{ frappe.format_value(cash.balance_effective_on, {"fieldtype": "Date"}) }}. Received and reviewed {{ frappe.format_value(cash.balance_reviewed_on, {"fieldtype": "Date"}) }}.</div>
+      {{ parts(cash.components) }}
+      <table style="width:100%"><tbody>
+        <tr><td>Balance supplied for this float</td><td style="text-align:right">{{ kes(cash.supplied_balance) }}</td></tr>
+        <tr><td>Add back: paid between the week end and that date</td><td style="text-align:right">{{ kes(cash.paid_before_balance_date) }}</td></tr>
+        <tr><td>Take off: received between the week end and that date</td><td style="text-align:right">{{ kes(-(cash.received_before_balance_date or 0)) }}</td></tr>
+        <tr style="border-top:1px solid #D5DAE6"><td>Actual balance at week end (Saturday closing)</td><td style="text-align:right">{{ kes(cash.actual_balance_at_week_end) }}</td></tr>
+        <tr style="font-weight:600;border-top:1px solid #D5DAE6;{% if cash.current_week_discrepancy %}color:#8A4B00{% endif %}"><td>Current-week discrepancy</td><td style="text-align:right">{{ kes(cash.current_week_discrepancy) }}</td></tr>
+      </tbody></table>
+      <div style="color:#6B7280;font-size:.92em;margin-top:6px">Lines dated on or after the balance date are not part of this bridge. They are counted in their own week.</div>
+      {% else %}
+      <div style="color:#6B7280;margin-top:8px">The closing balance has not been supplied yet.</div>
+      {% endif %}
+      {% endif %}
+    </div>
+    <div style="border:1px solid #D5DAE6;background:#fff;padding:12px 14px">
+      <div style="font-weight:600;margin-bottom:6px">Book against actual</div>
+      <div style="color:#6B7280;font-size:.92em;margin-bottom:8px">The whole difference between the records and the actual balance, and where it comes from.</div>
+      {% if cash.baseline %}
+      <table style="width:100%"><tbody>
+        <tr><td>Historical difference carried forward<br><span style="color:#6B7280">as at week ending {{ frappe.format_value(cash.baseline.week_ending, {"fieldtype": "Date"}) }}, acknowledged by {{ cash.baseline.acknowledged_name }}</span></td><td style="text-align:right;vertical-align:top">{{ kes(cash.historical_difference) }}</td></tr>
+        <tr><td>Discrepancies approved in earlier weeks since then</td><td style="text-align:right">{{ kes(cash.earlier_discrepancies_since_baseline) }}</td></tr>
+        <tr><td>Current-week discrepancy</td><td style="text-align:right">{% if cash.counted %}{{ kes(cash.current_week_discrepancy) }}{% else %}—{% endif %}</td></tr>
+        <tr style="font-weight:600;border-top:1px solid #D5DAE6"><td>{{ "Actual balance at week end less book cash balance" if cash.counted else "Difference at the start of the week" }}</td><td style="text-align:right">{{ kes(cash.book_vs_actual) }}</td></tr>
+      </tbody></table>
+      {% if cash.baseline.note %}<div style="color:#6B7280;font-size:.92em;margin-top:6px">Baseline note: {{ cash.baseline.note }}</div>{% endif %}
+      <div style="color:#6B7280;font-size:.92em;margin-top:6px">The historical difference is carried, not re-explained each week. It is not resolved by carrying it.</div>
+      {% else %}
+        <div style="color:#6B7280">No baseline yet. It is set when the opening actual balance is first recorded.</div>
+      {% endif %}
+    </div>
+  </div>
+
+  {% if cash.counted and cash.current_week_discrepancy %}
+  <div class="pc-cash-exception" style="margin:12px 0;padding:10px 14px;border:1px solid #E0B46A;background:#FFF6E5;color:#6B3A00">
+    <strong>New exception this week: {{ kes(cash.current_week_discrepancy) }}.</strong>
+    The actual balance at the week end does not equal the opening actual balance plus received less paid.
+    {% if cash.acknowledged_by %}
+      Acknowledged by {{ cash.acknowledged_name }} on {{ frappe.format_value(cash.acknowledged_on, {"fieldtype": "Datetime"}) }}.
+      Reason: {{ cash.acknowledged_reason }}{% if cash.acknowledged_evidence %} Evidence: {{ cash.acknowledged_evidence }}{% endif %}
+      <br>Acknowledged means seen and recorded. It does not mean the balance reconciles.
+    {% else %}Not yet acknowledged. The week cannot be approved until it is.{% endif %}
+  </div>
+  {% endif %}
+  {% if doc.cash_approval_kind %}
+  <div style="margin:12px 0;padding:10px 14px;border:1px solid #D5DAE6;background:#F3F5FA;color:#14264A">
+    <strong>Approved as:</strong> {{ "a new exception approved for this week" if doc.cash_approval_kind == "New cash exception approved" else "the actual balance agrees with this week's movements; the historical difference is carried" }}.
+  </div>
+  {% endif %}
+
+  {% macro balance_inputs(prefix) %}
+    <table style="width:100%;max-width:640px;table-layout:fixed;margin:4px 0 8px"><thead><tr style="color:#6B7280"><td>Where it is held</td><td>Balance supplied</td><td>Belongs to this float</td></tr></thead><tbody>
+      <tr><td><label for="{{ prefix }}CashB">Cash in hand</label></td><td><input type="number" step="0.01" min="0" id="{{ prefix }}CashB" style="width:100%;max-width:130px;box-sizing:border-box" placeholder="0"></td><td><input type="number" step="0.01" min="0" id="{{ prefix }}CashF" style="width:100%;max-width:130px;box-sizing:border-box" placeholder="all of it" aria-label="Cash in hand: belongs to this float"></td></tr>
+      <tr><td><label for="{{ prefix }}CorpB">Corporate M-Pesa</label></td><td><input type="number" step="0.01" min="0" id="{{ prefix }}CorpB" style="width:100%;max-width:130px;box-sizing:border-box" placeholder="0"></td><td><input type="number" step="0.01" min="0" id="{{ prefix }}CorpF" style="width:100%;max-width:130px;box-sizing:border-box" placeholder="all of it" aria-label="Corporate M-Pesa: belongs to this float"></td></tr>
+      <tr><td><label for="{{ prefix }}PersB">Personal M-Pesa</label></td><td><input type="number" step="0.01" min="0" id="{{ prefix }}PersB" style="width:100%;max-width:130px;box-sizing:border-box" placeholder="0"></td><td><input type="number" step="0.01" min="0" id="{{ prefix }}PersF" style="width:100%;max-width:130px;box-sizing:border-box" placeholder="required" aria-label="Personal M-Pesa: belongs to this float"></td></tr>
+    </tbody></table>
+    <div style="color:#6B7280;font-size:.92em;flex-basis:100%">A personal M-Pesa balance is not taken to be company money: enter how much of it belongs to this float.</div>
+  {% endmacro %}
+
+  {% if can_manage %}
+  <div class="pc-week-actions" style="margin:14px 0;padding:12px 14px;border:1px solid #D5DAE6;background:#fff">
+    <div style="font-weight:600;margin-bottom:8px">Balance and week</div>
+    <div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+      {% if doc.status == "Draft" and cash.opening_actual_balance is none and not opening_is_carried %}
+        <div style="flex-basis:100%"><strong>Opening actual balance.</strong> Enter the balance supplied as at the opening of Monday of this week.</div>
+        {{ balance_inputs("pcO") }}
+        <label for="pcOEff">Balance is as at the opening of</label>
+        <input type="date" id="pcOEff" value="{{ opening_monday }}">
+        <label for="pcORev">Received and reviewed on</label>
+        <input type="date" id="pcORev" value="{{ opening_review_default }}">
+        <label for="pcOpenNote" style="flex-basis:100%">What is known about any difference from the book opening balance, {{ kes(cash.book_opening) }}</label>
+        <textarea id="pcOpenNote" rows="2" style="flex:1 1 320px;min-width:0"></textarea>
+        <button type="button" class="btn btn-primary" data-pc-week="opening">Record opening balance</button>
+      {% elif doc.status == "Draft" %}
+        <div style="flex-basis:100%"><strong>Closing balance.</strong> Enter the balance supplied as at the opening of the Monday after this week ended.</div>
+        {{ balance_inputs("pcC") }}
+        <label for="pcCEff">Balance is as at the opening of</label>
+        <input type="date" id="pcCEff" value="{{ closing_monday }}">
+        <label for="pcCRev">Received and reviewed on</label>
+        <input type="date" id="pcCRev" value="{{ review_default }}">
+        <button type="button" class="btn btn-primary" data-pc-week="close">Close week</button>
+        <span style="color:#6B7280;flex-basis:100%">Saturday's closing balance is reached from the Monday opening balance through Sunday's payments and receipts only. Monday's own lines are not included.</span>
+      {% elif doc.status == "Closed" %}
+        {% if doc.cash_reconfirm_needed %}
+          <label for="pcReason" style="flex-basis:100%">Reason for this week's discrepancy</label>
+          <textarea id="pcReason" rows="2" style="flex:1 1 320px;min-width:0"></textarea>
+          <label for="pcEvidence" style="flex-basis:100%">Supporting evidence (statement, slip numbers, where it is filed)</label>
+          <input type="text" id="pcEvidence" style="flex:1 1 320px;min-width:0">
+          <button type="button" class="btn btn-primary" data-pc-week="confirm">Acknowledge exception</button>
+        {% endif %}
+        <button type="button" class="btn {% if doc.cash_reconfirm_needed %}btn-ghost{% else %}btn-primary{% endif %}" data-pc-week="approve">Approve week</button>
+        <button type="button" class="btn btn-ghost" data-pc-week="reopen">Reopen week</button>
+      {% else %}
+        <button type="button" class="btn btn-ghost" data-pc-week="reopen">Reopen week</button>
+      {% endif %}
+      <span id="pcWeekMsg" style="color:#8A909E;flex-basis:100%"></span>
+    </div>
+  </div>
+  {% endif %}
+
+  <div class="section">
+    <div class="section-head"><h2>Lines ({{ lines|length }})</h2></div>
+    <div style="overflow-x:auto">
+      <style>
+        /* Phone: each line becomes a card, so status and Open entry never fall off the side. */
+        @media (max-width: 700px) {
+          .pc-lines thead { display: none; }
+          .pc-lines, .pc-lines tbody, .pc-lines tr, .pc-lines td { display: block; width: 100%; }
+          .pc-lines tr { border: 1px solid #D5DAE6; padding: 10px 12px; margin-bottom: 10px; background: #fff; }
+          .pc-lines td { border: 0; padding: 2px 0; text-align: left !important; }
+          .pc-lines td:empty { display: none; }
+          .pc-lines td[data-label]::before { content: attr(data-label) ": "; color: #6B7280; }
+          .pc-lines td.pc-main { font-weight: 600; font-size: 1.05em; }
+          .pc-lines td.pc-main::before { content: none; }
+        }
+        /* A cancelled line: the money and details are struck through; its status and reason read normally. */
+        .pc-lines tr.pc-cancelled td:not([data-label="Status"]):not([data-label="Receipt"]) { text-decoration: line-through; }
+      </style>
+      <table class="grid pc-lines" style="width:100%">
+        <thead><tr>
+          <th>Date</th><th>Type</th><th>Slip no.</th><th>Recipient / detail</th>
+          <th style="text-align:right">Out</th><th style="text-align:right">In</th>
+          <th>Receipt</th><th>Status</th><th></th>
+        </tr></thead>
+        <tbody>
+          {% for l in lines %}
+          <tr {% if l.cancelled %}class="pc-cancelled" style="color:#8A909E"{% endif %}>
+            <td data-label="Date">{{ frappe.format_value(l.date, {"fieldtype": "Date"}) if l.date else "" }}</td>
+            <td class="pc-main">{{ l.label }}</td>
+            <td data-label="Slip no.">{{ l.voucher_no or "" }}</td>
+            <td data-label="Recipient / detail">{{ l.detail or "" }}</td>
+            <td data-label="Out" style="text-align:right">{% if l.direction == "out" %}{{ "{:,.2f}".format(l.amount) }}{% endif %}</td>
+            <td data-label="In" style="text-align:right">{% if l.direction == "in" %}{{ "{:,.2f}".format(l.amount) }}{% endif %}</td>
+            <td data-label="Receipt" style="text-decoration:none">{% if l.receipt %}<a href="{{ l.receipt }}" target="_blank">View</a>{% else %}None{% endif %}</td>
+            <td data-label="Status" style="text-decoration:none">{{ l.status }}</td>
+            <td style="text-decoration:none">{% if not l.cancelled and can_open %}<a href="/petty-cash/entry?name={{ doc.name|urlencode }}&open={{ l.id|urlencode }}">Open entry</a>{% endif %}</td>
+          </tr>
+          {% else %}
+          <tr><td colspan="9" style="color:#8A909E">No lines yet. Use Add entry to record the first one.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="display:flex;gap:8px;margin-top:24px;padding-bottom:48px">
+    <a href="/petty-cash/" class="btn btn-ghost">Back</a>
+  </div>
+</div>
+<script>
+(function () {
+  var root = document.querySelector("[data-pc-native]"); if (!root) return;
+  var sheet = root.dataset.pcSheet, rev = root.dataset.pcRevision;
+  var csrf = (window.frappe && frappe.csrf_token) || (document.querySelector('meta[name="csrf_token"]') || {}).content || "";
+  var msg = document.getElementById("pcWeekMsg");
+  function call(method, args) {
+    return fetch("/api/method/vcl_finance.petty_cash.api." + method, {
+      method: "POST", credentials: "same-origin",
+      headers: {"Content-Type": "application/json", "X-Frappe-CSRF-Token": csrf, Accept: "application/json"},
+      body: JSON.stringify(args)
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (r.ok) return j.message;
+        var m = "Could not do that.";
+        try { m = JSON.parse(JSON.parse(j._server_messages)[0]).message || m; } catch (e) { if (j.exception) m = j.exception; }
+        throw new Error(m.replace(/<[^>]+>/g, ""));
+      });
+    });
+  }
+  root.querySelectorAll("[data-pc-week]").forEach(function (b) {
+    b.addEventListener("click", function () {
+      var what = b.dataset.pcWeek, p;
+      function parts(prefix) {
+        var out = [], any = false;
+        [["Cash", "Cash in hand"], ["Corp", "Corporate M-Pesa"], ["Pers", "Personal M-Pesa"]].forEach(function (k) {
+          var b = document.getElementById(prefix + k[0] + "B").value, f = document.getElementById(prefix + k[0] + "F").value;
+          if (b !== "" || f !== "") { any = true; out.push({kind: k[1], balance: b === "" ? 0 : b, float_amount: f === "" ? null : f}); }
+        });
+        return any ? out : null;
+      }
+      if (what === "opening") {
+        var op = parts("pcO");
+        if (!op) { msg.textContent = "Enter the balance supplied: cash in hand, corporate M-Pesa and personal M-Pesa as they apply."; return; }
+        p = call("set_opening_count", {sheet: sheet, components: op, note: document.getElementById("pcOpenNote").value,
+                                       balance_date: document.getElementById("pcOEff").value, reviewed_on: document.getElementById("pcORev").value});
+      } else if (what === "close") {
+        var cp = parts("pcC");
+        if (!cp) { msg.textContent = "Enter the balance supplied: cash in hand, corporate M-Pesa and personal M-Pesa as they apply."; return; }
+        p = call("close_week", {sheet: sheet, components: cp, revision: rev,
+                                balance_date: document.getElementById("pcCEff").value, reviewed_on: document.getElementById("pcCRev").value});
+      } else if (what === "confirm") {
+        var why = document.getElementById("pcReason").value;
+        if (!why.trim()) { msg.style.color = "#B00020"; msg.textContent = "Give the reason for this week's discrepancy."; return; }
+        p = call("confirm_cash", {sheet: sheet, revision: rev, reason: why, evidence: document.getElementById("pcEvidence").value});
+      }
+      else if (what === "approve") p = call("approve_week", {sheet: sheet, revision: rev});
+      else p = call("reopen_week", {sheet: sheet});
+      b.disabled = true; msg.style.color = "#8A909E"; msg.textContent = "Working…";
+      p.then(function () { location.reload(); })
+       .catch(function (e) { b.disabled = false; msg.style.color = "#B00020"; msg.textContent = e.message; });
+    });
+  });
+})();
+</script>
+{% else %}
 <div class="page" data-pc-editor="1" data-pc-sheet="{{ doc.name }}">
   <div class="page-head">
     <div>
@@ -275,4 +546,5 @@
     <a href="/petty-cash/" class="btn btn-ghost">Back</a>
   </div>
 </div>
+{% endif %}
 {% endblock %}

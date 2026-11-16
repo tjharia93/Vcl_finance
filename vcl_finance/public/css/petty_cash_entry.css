@@ -224,3 +224,14 @@
   .wz.adding .wz-body { padding-bottom: 90px; }
   .wz.adding .wz-foot { position: fixed; bottom: 0; left: 0; right: 0; }
 }
+
+/* In-page reason box for cancelling an entry (replaces the browser prompt; D-01). */
+.wz-ask{position:fixed;inset:0;background:rgba(15,20,40,.45);display:flex;align-items:center;justify-content:center;z-index:2000;padding:16px}
+.wz-ask-box{background:#fff;color:#1B1E2E;max-width:420px;width:100%;padding:18px;border-radius:10px;display:flex;flex-direction:column;gap:10px}
+.wz-ask-t{font-weight:700;font-size:16px}
+.wz-ask-b{font-size:14px;color:#4A4F6B}
+.wz-ask textarea{width:100%;font:inherit;padding:8px;border:1px solid #CCD2E3;border-radius:6px}
+.wz-ask-err{color:#B42318;font-size:13px}
+.wz-ask-a{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.wz-ask-a button{font:inherit;padding:10px 14px;border-radius:6px;border:1px solid #CCD2E3;background:#fff;cursor:pointer;min-height:44px}
+.wz-ask-a .wz-ask-yes{background:var(--wz-blue,#1F5FBF);border-color:var(--wz-blue,#1F5FBF);color:#fff}

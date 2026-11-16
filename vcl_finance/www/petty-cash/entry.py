@@ -62,8 +62,17 @@ def get_context(context):
     name = frappe.form_dict.get("name") or frappe.form_dict.get("sheet")
     opens = _open_sheets()
 
+    from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import auto_weeks_on, open_week
+    context.auto_weeks = auto_weeks_on()
+    if not name and context.auto_weeks and not frappe.form_dict.get("pick"):
+        # Nobody picks or opens a week: today's date decides it, and the system opens
+        # the week if this is its first visit. A line dated in another week is sent to
+        # that week when it is saved. ``?pick=1`` still lists the other open weeks.
+        frappe.local.flags.redirect_location = f"/petty-cash/entry?name={open_week()}"
+        raise frappe.Redirect
+
     if not name:
-        if len(opens) == 1:
+        if len(opens) == 1 and not frappe.form_dict.get("pick"):
             frappe.local.flags.redirect_location = f"/petty-cash/entry?name={opens[0]['name']}"
             raise frappe.Redirect
         context.no_cache = 1
@@ -77,7 +86,7 @@ def get_context(context):
 
     doc = frappe.get_doc("Petty Cash Sheet", name)
     # First render of a brand-new sheet: force the blank grid once.
-    if doc.docstatus == 0 and not doc.vouchers:
+    if doc.docstatus == 0 and not doc.vouchers and not doc.get("native_lines"):
         doc.ensure_grid()
         doc.save(ignore_permissions=True)
         doc = frappe.get_doc("Petty Cash Sheet", name)
@@ -89,6 +98,13 @@ def get_context(context):
     context.title = f"Add entry — Wk {doc.week_no or '?'}"
     context.doc = doc
     context.sheet = doc
+    from datetime import timedelta
+    from frappe.utils import getdate
+    _end = getdate(doc.week_ending)
+    # The dd/mm range shows only on weeks kept as entries; every other week keeps the label it
+    # always had, so deploying this changes nothing a user sees until a week is switched on.
+    context.week_label = (f"{(_end - timedelta(days=6)).strftime('%d/%m')} to {_end.strftime('%d/%m/%Y')}"
+                          if doc.get("native_lines") else str(doc.week_ending))
     context.open_sheets = opens
     context.entry_types = ENTRY_TYPES
     context.categories = CATEGORIES

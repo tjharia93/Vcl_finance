@@ -9,6 +9,8 @@ def get_context(context):
 
     context.no_cache = 1
     context.title = "VCL Petty Cash"
+    from vcl_finance.petty_cash.doctype.petty_cash_sheet.petty_cash_sheet import auto_weeks_on
+    context.auto_weeks = auto_weeks_on()
     context.sheets = frappe.get_all(
         "Petty Cash Sheet",
         fields=[

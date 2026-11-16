@@ -30,6 +30,8 @@ def get_context(context):
         frappe.throw(_("Not permitted."), frappe.PermissionError)
 
     doc = frappe.get_doc("Petty Cash Sheet", name)
+    from vcl_finance.petty_cash.api import _native
+    _native(doc)      # a native week's rows, rebuilt in memory from its entries
 
     try:
         copies = max(1, min(int(frappe.form_dict.get("copies") or 1), 4))

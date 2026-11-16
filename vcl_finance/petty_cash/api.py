@@ -63,7 +63,30 @@ def _date_str(d):
 # Summary + feed (ports _summary / _feed_items)
 # ----------------------------------------------------------------------
 
+def _retrying(fn):
+    """Each of these actions is the whole of its request. It runs in a fresh transaction
+    that takes the week lock before it reads anything, and is run again if another session
+    got in first. See ``native.exclusive_call``."""
+    import functools
+
+    @functools.wraps(fn)
+    def run(*args, **kwargs):
+        from vcl_finance.petty_cash.native import exclusive_call
+        return exclusive_call(fn, args, kwargs)
+    return run
+
+
+def _native(doc):
+    """Rows for a NATIVE week are rebuilt in memory from its entries, so everything
+    below that reads ``doc.vouchers`` and friends works on either kind of week."""
+    if cint(doc.get("native_lines")):
+        from vcl_finance.petty_cash import native
+        native.hydrate(doc)
+    return doc
+
+
 def _summary(doc):
+    _native(doc)
     # Cancelled (voided) rows are excluded from every figure here so cash-remaining,
     # expected close and variance all ignore them (they remain on the sheet for audit).
     cat = {c: 0.0 for c in CATEGORY_CODES}
@@ -102,11 +125,20 @@ def _summary(doc):
         "variance": variance,
         "opening_balance": flt(doc.opening_balance or 0, 2),
         "status": doc.status,
+        # For a native week: the version the screen is showing. Close and approve send
+        # it back, and are refused if a line has changed since.
+        "native": bool(cint(doc.get("native_lines"))),
+        "lines_revision": cint(doc.get("lines_revision")),
+        "cash_reconfirm_needed": bool(cint(doc.get("cash_reconfirm_needed"))),
+        # The figure the screens have called "cash remaining" comes from the BOOK. On a
+        # week kept as entries it is named for what it is, next to what was counted.
+        "balance_label": "Book cash balance" if cint(doc.get("native_lines")) else "Cash remaining",
     }
 
 
 def _feed_items(doc):
     """Flatten a sheet's non-blank entries into one chronological feed."""
+    _native(doc)
     items = []
 
     for v in doc.vouchers:
@@ -388,6 +420,7 @@ def _route_to_week(anchor, txn_date):
 
 
 @frappe.whitelist()
+@_retrying
 def quick_entry(sheet, kind, **fields):
     """Append ONE line to the child table of the sheet whose week CONTAINS ``txn_date``.
 
@@ -422,6 +455,18 @@ def quick_entry(sheet, kind, **fields):
                 "re-open it before adding entries."
             ).format(getdate(doc.week_ending).strftime("%d/%m/%Y")))
         frappe.throw(_("That week is closed — re-open it before adding entries."))
+
+    if cint(doc.native_lines):
+        # This week keeps its lines as entries: the line is created as one, with the
+        # same checks, and there is no row to append.
+        from vcl_finance.petty_cash import native
+        line = native.create_line(doc, kind, fields, txn_date)
+        doc.reload()
+        return {
+            "ok": True, "sheet": doc.name, "requested_sheet": anchor.name, "rerouted": rerouted,
+            "week_ending": str(doc.week_ending), "kind": kind, "entry_id": line.name,
+            "row_idx": None, "native": True, "summary": _summary(doc),
+        }
 
     amount = flt(fields.get("amount"))
     target = None
@@ -575,6 +620,7 @@ def _open_sheet_for_write(sheet):
 
 
 @frappe.whitelist(methods=["POST"])
+@_retrying
 def cancel_entry(sheet, entry_id, remark=None):
     """Soft-cancel (void) ONE child row — it is NOT deleted.
 
@@ -585,6 +631,12 @@ def cancel_entry(sheet, entry_id, remark=None):
     """
     doc = _open_sheet_for_write(sheet)
     _assert_can_write(doc)
+    if cint(doc.native_lines):
+        from vcl_finance.petty_cash import native
+        line = native.cancel_line(doc.name, entry_id, remark)
+        doc.reload()
+        return {"ok": True, "sheet": doc.name, "cancelled_in": native.KIND_TABLE.get(line.entry_kind),
+                "entry_id": entry_id, "native": True, "summary": _summary(doc)}
     table, row = _find_row(doc, entry_id)
     if row is None:
         frappe.throw(_("That entry no longer exists on this sheet."))
@@ -602,10 +654,17 @@ def cancel_entry(sheet, entry_id, remark=None):
 
 
 @frappe.whitelist(methods=["POST"])
+@_retrying
 def reinstate_entry(sheet, entry_id):
     """Reverse a mistaken cancel — clears ``cancelled`` so the row counts again."""
     doc = _open_sheet_for_write(sheet)
     _assert_can_write(doc)
+    if cint(doc.native_lines):
+        from vcl_finance.petty_cash import native
+        line = native.reinstate_line(doc.name, entry_id)
+        doc.reload()
+        return {"ok": True, "sheet": doc.name, "reinstated_in": native.KIND_TABLE.get(line.entry_kind),
+                "entry_id": entry_id, "native": True, "summary": _summary(doc)}
     table, row = _find_row(doc, entry_id)
     if row is None:
         frappe.throw(_("That entry no longer exists on this sheet."))
@@ -628,6 +687,7 @@ def reinstate_entry(sheet, entry_id):
 # ----------------------------------------------------------------------
 
 @frappe.whitelist()
+@_retrying
 def attach_receipt(sheet, voucher_name=None, file_url=None, row_name=None):
     """Set a child row's ``receipt`` Attach Image to an uploaded File's url.
 
@@ -653,6 +713,11 @@ def attach_receipt(sheet, voucher_name=None, file_url=None, row_name=None):
     _assert_can_write(doc)
     if doc.docstatus != 0:
         frappe.throw(_("Sheet is submitted — cannot change receipts."))
+    if cint(doc.native_lines):
+        from vcl_finance.petty_cash import native
+        line = native.attach_receipt_line(doc.name, row_name, file_url)
+        return {"ok": True, "table": native.KIND_TABLE.get(line.entry_kind), "row_name": row_name,
+                "voucher_name": row_name, "receipt": file_url, "native": True}
     table, row = _find_row(doc, row_name)
     if row is None:
         frappe.throw(_("That row no longer exists on this sheet."))
@@ -664,22 +729,124 @@ def attach_receipt(sheet, voucher_name=None, file_url=None, row_name=None):
 
 
 @frappe.whitelist(methods=["POST"])
-def close_week(sheet, cash_count_end):
+@_retrying
+def close_week(sheet, cash_count_end=None, revision=None, balance_date=None, reviewed_on=None, components=None):
     if not _is_accounts_manager():
         frappe.throw("Only an Accounts Manager can close a week.", frappe.PermissionError)
     frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
+    # The same lock every change to a line takes, taken FIRST: a line cannot be changed
+    # between the moment the totals are read here and the moment the week is closed.
+    # For a native week the caller must also be looking at the current version.
+    from vcl_finance.petty_cash import native
+    locked = native.week_gate(sheet, revision)
+    rows = None
+    if cint(locked["native_lines"]):
+        # The balance supplied for the float: one figure, or its components (cash in hand,
+        # corporate M-Pesa, and the stated float portion of a personal M-Pesa balance).
+        # Never negative; a negative BOOK balance is an exception to show, not a balance
+        # to type in.
+        rows, cash_count_end = native.clean_components(components, cash_count_end)
+        if native.ensure_opening_count(sheet) is None:
+            frappe.throw(
+                _("Record the opening actual balance for this week first. It is kept next to the book opening balance."),
+                title=_("Opening actual balance needed"))
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    if cint(locked["native_lines"]):
+        # TWO DATES. What the balance is OF: the opening of a day, normally the Monday after
+        # the week ended. And when it was received and reviewed: normally the Wednesday.
+        # The supplied figure is used as it is. Saturday's closing balance is reached from
+        # it through the days in between only (Sunday, for a Monday balance); nothing dated
+        # on or after the balance date is included.
+        week_end = getdate(doc.week_ending)
+        monday = frappe.utils.add_days(week_end, 2)
+        effective = getdate(balance_date) if balance_date else monday
+        reviewed = getdate(reviewed_on) if reviewed_on else max(getdate(frappe.utils.today()), effective)
+        effective, reviewed = native._check_dates(
+            effective, reviewed, frappe.utils.add_days(week_end, 1), frappe.utils.add_days(week_end, 7), _("The closing balance"))
+        doc.balance_effective_on, doc.balance_reviewed_on = effective, reviewed
+        doc.balance_components = json.dumps(rows) if rows else None
     doc.cash_count_end = flt(cash_count_end)
     doc.status = "Closed"
     doc.closed_by = frappe.session.user
     doc.closed_on = frappe.utils.now_datetime()
-    doc.save()  # controller recomputes total_out/expected_close/variance
-    return {"name": doc.name, "status": doc.status, "expected_close": doc.expected_close,
-            "cash_count_end": doc.cash_count_end, "variance": doc.variance}
+    doc.save()  # controller recomputes total_out/expected_close/variance, from the entries
+    if cint(doc.native_lines):
+        # What the count was reconciled against, kept so a later change to a line can be
+        # seen against it. The count itself is never rewritten by a line change.
+        # The week's cash is judged on the PHYSICAL chain: the closing count against the
+        # opening count plus what came in less what went out. Any difference is a NEW
+        # discrepancy for this week: no tolerance, and it must be acknowledged with a reason
+        # before the week can be approved. The difference between the book and the tin that
+        # was already there at the baseline is carried and shown; it is not asked about
+        # again, and it is never used to absorb this week's discrepancy.
+        cash = native.refresh_cash(doc.name)
+        exception = bool(flt(cash["cash_discrepancy"], 2))
+        frappe.db.set_value("Petty Cash Sheet", doc.name, {
+            "expected_close_at_count": doc.expected_close, "cash_reconfirm_needed": 1 if exception else 0,
+            "cash_confirmed_by": None, "cash_confirmed_on": None, "cash_confirm_reason": None,
+            "cash_confirm_evidence": None, "cash_approval_kind": None}, update_modified=False)
+        pos = native.cash_position(doc.name)
+        fmt = lambda v: frappe.format_value(v, {"fieldtype": "Currency"})
+        day = lambda d: frappe.format_value(d, {"fieldtype": "Date"})
+        parts = "; ".join(
+            f"{r['kind']} {fmt(r['float_amount'])}" + (f" of {fmt(r['balance'])}" if r["float_amount"] != r["balance"] else "")
+            for r in (pos["components"] or []))
+        doc.add_comment("Info", _(
+            "Week closed. Balance supplied for this float: {count} as at the opening of {eff}, received and reviewed {rev}"
+            "{parts}. Bridge to the week end: + paid {out_since} - received {in_since} between the week end and that date "
+            "= actual balance at week end {at_end}. Expected {expected} (opening actual balance {opening} + received "
+            "{received} - paid {paid}); this week's discrepancy {disc}. Book cash balance {book}; book against actual "
+            "{diff}, of which historical difference carried {hist}.{exc}").format(
+                count=fmt(pos["supplied_balance"]), eff=day(doc.balance_effective_on), rev=day(doc.balance_reviewed_on),
+                parts=f" ({parts})" if parts else "", out_since=fmt(pos["paid_before_balance_date"]),
+                in_since=fmt(pos["received_before_balance_date"]), at_end=fmt(pos["actual_balance_at_week_end"]),
+                expected=fmt(pos["expected_actual_close"]), opening=fmt(pos["opening_actual_balance"]),
+                received=fmt(doc.total_in), paid=fmt(doc.total_out), disc=fmt(pos["current_week_discrepancy"]),
+                book=fmt(pos["book_cash_balance"]), diff=fmt(pos["book_vs_actual"]),
+                hist=fmt(pos["historical_difference"] or 0),
+                exc=_(" A new cash exception: it must be acknowledged before the week can be approved.") if exception else ""))
+    out = {"name": doc.name, "status": doc.status, "expected_close": doc.expected_close,
+           "cash_count_end": doc.cash_count_end, "variance": doc.variance,
+           "lines_revision": cint(doc.lines_revision)}
+    if cint(doc.native_lines):
+        out["cash"] = native.cash_position(doc.name)
+    return out
 
 
 @frappe.whitelist(methods=["POST"])
-def approve_week(sheet):
+@_retrying
+def confirm_cash(sheet, revision=None, reason=None, evidence=None):
+    """Finance acknowledges this week's cash exception, with a reason and any evidence.
+    Acknowledging is not reconciling. See ``native.confirm_cash``."""
+    frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
+    from vcl_finance.petty_cash import native
+    return native.confirm_cash(sheet, revision, reason, evidence)
+
+
+@frappe.whitelist(methods=["POST"])
+@_retrying
+def set_opening_count(sheet, amount=None, note=None, components=None, balance_date=None, reviewed_on=None):
+    """Record the float's actual balance for the first week kept as entries: the supplied
+    Monday opening balance (one figure or its components), the date it is of and the date
+    it was reviewed. Sets the historical-difference baseline. See
+    ``native.set_opening_count``."""
+    frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
+    from vcl_finance.petty_cash import native
+    return native.set_opening_count(sheet, amount, note, components, balance_date, reviewed_on)
+
+
+@frappe.whitelist()
+def cash_position(sheet):
+    """Book cash balance, physical count, historical difference carried and this week's
+    discrepancy, kept apart. Read-only."""
+    frappe.has_permission("Petty Cash Sheet", "read", sheet, throw=True)
+    from vcl_finance.petty_cash import native
+    return native.cash_position(sheet)
+
+
+@frappe.whitelist(methods=["POST"])
+@_retrying
+def approve_week(sheet, revision=None):
     """Second, distinct sign-off after Close — fully locks the week.
 
     Draft → Closed (reopenable) → Approved (still reopenable by an Accounts
@@ -689,9 +856,16 @@ def approve_week(sheet):
     if not _is_accounts_manager():
         frappe.throw("Only an Accounts Manager can approve a week.", frappe.PermissionError)
     frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
+    from vcl_finance.petty_cash import native
+    native.week_gate(sheet, revision)          # lock first; current version for a native week
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
     if doc.status != "Closed":
         frappe.throw("A week must be Closed before it can be approved.")
+    if cint(doc.native_lines) and cint(doc.cash_reconfirm_needed):
+        frappe.throw(
+            "This week has a new discrepancy: the actual balance at the week end does not equal the opening "
+            "actual balance plus received less paid. Acknowledge it, with the reason, before approving the week.",
+            title="Cash exception not acknowledged")
     # The week is the second signature, so every entry in it must already carry the
     # first. Without this a week could be approved with entries still open, and the
     # posting run would then hold them back without the sheet ever saying so.
@@ -699,29 +873,63 @@ def approve_week(sheet):
     # so a native entry (no source sheet) or one dated into this week is not missed.
     base = {"cancelled": 0, "sync_state": ["!=", "Orphaned"],
             "status": ["not in", ["Approved", "Void"]], "amount": ["!=", 0]}
-    seen = {}
-    for extra in ({"origin_sheet": doc.name}, {"week_ending": doc.week_ending, "float": doc.float}):
-        for e in frappe.get_all("Petty Cash Entry", filters={**base, **extra},
-                                fields=["name", "amount"], limit_page_length=0):
-            seen[e["name"]] = e
+    # This sheet's own lines come from the one shared lookup (weeks.py): mirrored,
+    # native and unlinked, each once.
+    from vcl_finance.petty_cash import weeks
+    own = {k: v for k, v in base.items() if k != "sync_state"}
+    seen = {e["name"]: e for e in weeks.week_entries(
+        doc.name, fields=["name", "amount", "origin_sheet", "week_sheet"], filters=own)}
+    # KEPT AS IT WAS: a line that sits on ANOTHER sheet but is dated into this week
+    # also holds this week's approval back. That is wider than "this sheet's lines"
+    # and is legacy behaviour, left alone so existing weeks approve exactly as before.
+    for e in frappe.get_all("Petty Cash Entry",
+                            filters={**base, "week_ending": doc.week_ending, "float": doc.float},
+                            fields=["name", "amount", "origin_sheet", "week_sheet"], limit_page_length=0):
+        seen.setdefault(e["name"], e)
     open_entries = list(seen.values())
     if open_entries:
+        # Say WHICH lines, and which sheet each one actually sits on: a line on another
+        # sheet that is dated into this week blocks it too, and without the sheet that
+        # reads as a mystery.
+        def where(e):
+            home = e.get("week_sheet") or e.get("origin_sheet") or doc.name
+            return f"{e['name']} (KES {flt(e['amount']):,.2f})" + ("" if home == doc.name else f" on {home}")
+        listed = "; ".join(where(e) for e in open_entries[:10])
+        more = f"; and {len(open_entries) - 10} more" if len(open_entries) > 10 else ""
         frappe.throw(
             f"{len(open_entries)} entr{'y is' if len(open_entries) == 1 else 'ies are'} not approved yet "
             f"(KES {sum(flt(e['amount']) for e in open_entries):,.2f}). Approve every entry first, "
-            f"then approve the week.",
+            f"then approve the week. Not approved: {listed}{more}.",
             title="Entries still open")
     doc.status = "Approved"
     doc.approved_by = frappe.session.user
     doc.approved_on = frappe.utils.now_datetime()
     doc.save()
-    return {"name": doc.name, "status": doc.status,
-            "approved_by": doc.approved_by, "approved_on": str(doc.approved_on),
-            "expected_close": doc.expected_close,
-            "cash_count_end": doc.cash_count_end, "variance": doc.variance}
+    if cint(doc.native_lines):
+        # Say which it was: the historical difference merely carried, or a new exception
+        # for this week approved. They are different things and are recorded as such.
+        pos = native.cash_position(doc.name)
+        new_exception = bool(flt(pos["current_week_discrepancy"] or 0, 2))
+        kind = "New cash exception approved" if new_exception else "Cash agrees; historical difference carried"
+        frappe.db.set_value("Petty Cash Sheet", doc.name, "cash_approval_kind", kind, update_modified=False)
+        fmt = lambda v: frappe.format_value(v, {"fieldtype": "Currency"})
+        doc.add_comment("Info", (
+            f"Week approved with a NEW cash exception of {fmt(pos['current_week_discrepancy'])} for this week, acknowledged by "
+            f"{pos['acknowledged_by']}: {pos['acknowledged_reason']}. Historical difference carried: {fmt(pos['historical_difference'] or 0)}."
+            if new_exception else
+            f"Week approved. This week's actual balance agrees with its movements. Historical difference carried, unchanged: "
+            f"{fmt(pos['historical_difference'] or 0)}."))
+    out = {"name": doc.name, "status": doc.status,
+           "approved_by": doc.approved_by, "approved_on": str(doc.approved_on),
+           "expected_close": doc.expected_close,
+           "cash_count_end": doc.cash_count_end, "variance": doc.variance}
+    if cint(doc.native_lines):
+        out["cash"] = native.cash_position(doc.name)
+    return out
 
 
 @frappe.whitelist(methods=["POST"])
+@_retrying
 def reopen_week(sheet):
     """Re-open a Closed OR Approved week back to Draft (Accounts-Manager-only).
 
@@ -731,7 +939,21 @@ def reopen_week(sheet):
     if not _is_accounts_manager():
         frappe.throw("Only an Accounts Manager can reopen a week.", frappe.PermissionError)
     frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
+    from vcl_finance.petty_cash import native, weeks
+    native.lock_sheet(sheet)                   # the same lock as a line change, taken first
     doc = frappe.get_doc("Petty Cash Sheet", sheet)
+    discarded = None
+    if cint(doc.native_lines):
+        # Controlled regeneration. A submitted journal or a pushed QuickBooks expense
+        # refuses the reopen; drafts and an unpushed staging row are discarded, for every
+        # company, so no journal is left pointing at lines that can now change.
+        from vcl_finance.petty_cash import weekpost
+        discarded = weekpost.discard_drafts(doc.name)
+        frappe.db.set_value("Petty Cash Sheet", doc.name, {
+            "cash_reconfirm_needed": 0, "cash_confirmed_by": None, "cash_confirmed_on": None,
+            "cash_confirm_reason": None, "cash_confirm_evidence": None, "cash_approval_kind": None,
+            "cash_discrepancy": 0, "expected_close_at_count": 0}, update_modified=False)
+        doc.reload()
     doc.status = "Draft"
     doc.closed_by = None
     doc.closed_on = None
@@ -739,7 +961,7 @@ def reopen_week(sheet):
     doc.approved_on = None
     doc.save()
     return {"name": doc.name, "status": doc.status, "expected_close": doc.expected_close,
-            "cash_count_end": doc.cash_count_end, "variance": doc.variance}
+            "cash_count_end": doc.cash_count_end, "variance": doc.variance, "discarded": discarded}
 
 
 @frappe.whitelist()
@@ -1073,3 +1295,81 @@ def _report_checks(sheets):
                                f"{nm}: this week's close {close:,.0f} does NOT carry into {n.name} "
                                f"(w/e {n.week_ending}) opening {flt(n.opening_balance):,.0f} — gap {gap:,.0f}."))
     return checks
+
+
+@frappe.whitelist(methods=["POST"])
+@_retrying
+def move_entry_to_week(entry, txn_date):
+    """Move a line to the week that contains ``txn_date`` — the only way a line changes
+    week. The line stays the same entry, whichever way either week keeps its lines.
+    See ``native.move_line``."""
+    from vcl_finance.petty_cash import native
+    doc = frappe.get_doc("Petty Cash Entry", entry)
+    sheet = doc.week_sheet or doc.origin_sheet
+    if not sheet or not frappe.has_permission("Petty Cash Sheet", "write", sheet):
+        frappe.throw(_("Not permitted."), frappe.PermissionError)
+    return native.move_line(entry, txn_date)
+
+
+@frappe.whitelist(methods=["POST"])
+@_retrying
+def edit_entry(sheet, entry_id, **fields):
+    """Edit one line of a NATIVE week — what the entry page's Edit does there.
+
+    (On a week that keeps rows the page writes the row on the sheet, as it always has.)
+    Returns the same shape as ``quick_entry`` so the page can refresh from it.
+    """
+    doc = _open_sheet_for_write(sheet)
+    _assert_can_write(doc)
+    if not cint(doc.native_lines):
+        frappe.throw(_("This week keeps its lines as rows. Edit the row on the sheet."))
+    from vcl_finance.petty_cash import native
+    for drop in ("cmd", "sheet", "entry_id"):
+        fields.pop(drop, None)
+    line = native.edit_line(doc.name, entry_id, fields)
+    home = frappe.get_doc("Petty Cash Sheet", line.week_sheet or line.origin_sheet)
+    return {"ok": True, "sheet": home.name, "requested_sheet": doc.name, "rerouted": home.name != doc.name,
+            "entry_id": line.name, "native": True, "summary": _summary(home)}
+
+
+def petty_cash_loan_rows():
+    """Every live loan line across all weeks, for the print format's cumulative ledger.
+
+    The ledger used to read the ``Petty Cash Loan Entry`` rows straight from the
+    database. A week that keeps its lines as entries stores no such rows, so its loans
+    would have dropped out of that week's ledger and every later one. This returns the
+    stored rows AND the native loan entries, in the same shape, each with the sheet it
+    belongs to as ``parent``.
+    """
+    fields = ["parent", "txn_date", "recipient", "staff_id", "reason", "amount_issued", "amount_signed", "paye"]
+    rows = frappe.get_all(
+        "Petty Cash Loan Entry", filters={"parenttype": "Petty Cash Sheet", "cancelled": 0},
+        fields=fields + ["idx"], order_by="txn_date asc, idx asc", limit_page_length=0, ignore_permissions=True)
+    for e in frappe.get_all(
+            "Petty Cash Entry",
+            filters={"entry_kind": "loan", "week_sheet": ("is", "set"), "cancelled": 0, "sync_state": ("!=", "Orphaned")},
+            fields=["week_sheet", "txn_date", "recipient", "amount", "payload", "creation"],
+            order_by="txn_date asc, creation asc", limit_page_length=0, ignore_permissions=True):
+        try:
+            extra = json.loads(e.payload or "{}")
+        except ValueError:
+            extra = {}
+        rows.append(frappe._dict(
+            parent=e.week_sheet, txn_date=e.txn_date, recipient=e.recipient, staff_id=extra.get("staff_id"),
+            reason=extra.get("reason"), amount_issued=flt(e.amount), amount_signed=flt(extra.get("amount_signed")),
+            paye=cint(extra.get("paye")), idx=9999))
+    # Same order the ledger always had: by date (undated first, as the database sorts
+    # them), then by row position. A stable sort, so stored rows keep their order exactly.
+    rows.sort(key=lambda r: (str(r.txn_date or ""), cint(r.idx)))
+    return rows
+
+
+@frappe.whitelist(methods=["POST"])
+@_retrying
+def convert_week_to_rows(sheet):
+    """Fallback: convert a week that keeps its lines as entries back to rows on the
+    sheet, keeping every entry and everything attached to it. Accounts Manager only.
+    See ``native.convert_week_to_rows``."""
+    frappe.has_permission("Petty Cash Sheet", "write", sheet, throw=True)
+    from vcl_finance.petty_cash import native
+    return native.convert_week_to_rows(sheet)

@@ -260,6 +260,8 @@ def stage_week(week_ending, float_name=None, **kwargs):
     """
     _guard()
     float_name = float_name or kwargs.get("float")
+    from vcl_finance.petty_cash.post import _refuse_native
+    _refuse_native(week_ending, float_name)
     p = preview_qbo_journal(week_ending, float_name)
 
     if not p["payload"]:

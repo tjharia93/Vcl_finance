@@ -50,7 +50,39 @@
   "amended_from",
   "journal_entry",
   "qbo_queue",
+  "posting_results",
+  "last_posting_error",
+  "last_posting_on",
   "backfill",
+  "native_lines",
+  "lines_revision",
+  "expected_close_at_count",
+  "cash_reconfirm_needed",
+  "cash_confirmed_by",
+  "cash_confirmed_on",
+  "opening_actual_balance",
+  "opening_actual_source",
+  "opening_recorded_by",
+  "opening_recorded_on",
+  "opening_snapshot_amount",
+  "opening_snapshot_on",
+  "opening_reviewed_on",
+  "opening_components",
+  "cash_baseline_set",
+  "baseline_note",
+  "baseline_acknowledged_by",
+  "baseline_acknowledged_on",
+  "balance_effective_on",
+  "balance_reviewed_on",
+  "balance_components",
+  "paid_before_balance_date_amt",
+  "received_before_balance_date_amt",
+  "actual_at_week_end",
+  "expected_actual_close",
+  "cash_discrepancy",
+  "cash_confirm_reason",
+  "cash_confirm_evidence",
+  "cash_approval_kind",
   "section_notes",
   "notes",
   "control_totals",
@@ -378,6 +410,284 @@
    "read_only": 1,
    "no_copy": 1,
    "description": "The QBO Petty Cash Journal row this week was staged in."
+  },
+  {
+   "fieldname": "native_lines",
+   "fieldtype": "Check",
+   "label": "Lines are entries (native)",
+   "default": "0",
+   "print_hide": 1,
+   "description": "On: each line of this week is its own Petty Cash Entry and this sheet is only the week header. Off: lines are rows on this sheet, copied to entries on save. Can only be turned on while the sheet has no rows, and off while the week has no native entries."
+  },
+  {
+   "fieldname": "lines_revision",
+   "fieldtype": "Int",
+   "label": "Lines revision",
+   "default": "0",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "Set by the server only. Goes up whenever a line of this week is added, voided, moved or has a reviewed field changed. Close and approve compare it with the revision the reviewer was shown."
+  },
+  {
+   "fieldname": "expected_close_at_count",
+   "fieldtype": "Currency",
+   "label": "Expected close when counted",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "The expected closing cash at the moment the week was closed with its cash count. Kept so a later change to a line can be seen against the count that was reconciled."
+  },
+  {
+   "fieldname": "cash_reconfirm_needed",
+   "fieldtype": "Check",
+   "label": "Cash reconciliation needs confirming",
+   "default": "0",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "Set by the server when a line that moves cash (amount, in/out, void, move) changes after the week was closed. The week cannot be approved until Finance confirms the new variance. The physical count itself is never changed by this."
+  },
+  {
+   "fieldname": "cash_confirmed_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Variance confirmed by",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "cash_confirmed_on",
+   "fieldtype": "Datetime",
+   "label": "Variance confirmed on",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "last_posting_error",
+   "fieldtype": "Small Text",
+   "label": "Last posting error",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "last_posting_on",
+   "fieldtype": "Datetime",
+   "label": "Last posting attempt",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "posting_results",
+   "fieldtype": "Long Text",
+   "label": "Posting results, by company",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "One record per company with its journal, kept as text on the week itself. A week's lines can belong to more than one company; each company's journal is listed here. Kept as a plain field rather than a child table so the week stays readable if the app is rolled back to a version that does not know about it."
+  },
+  {
+   "fieldname": "opening_actual_balance",
+   "fieldtype": "Currency",
+   "label": "Opening actual balance (this float)",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "The float's actual balance at the start of this week. For the first week kept as entries it is reached from the supplied Monday opening balance through Sunday's movements; after that it is the previous week's Saturday closing balance. Kept separately from the book opening balance; neither replaces the other.",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "opening_actual_source",
+   "fieldtype": "Select",
+   "options": "\nSupplied\nCarried from previous week",
+   "label": "Opening actual balance is",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "opening_recorded_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Opening balance recorded by",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "opening_recorded_on",
+   "fieldtype": "Datetime",
+   "label": "Opening balance recorded on",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "cash_baseline_set",
+   "fieldtype": "Check",
+   "label": "Historical difference baseline set on this week",
+   "default": "0",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Set once per float: the week where an opening actual balance was first recorded next to the book opening balance. Their difference is the historical difference carried forward. It is acknowledged here once, with a note, and not asked about again each week.",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "baseline_note",
+   "fieldtype": "Small Text",
+   "label": "Baseline acknowledgement note",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "baseline_acknowledged_by",
+   "fieldtype": "Link",
+   "options": "User",
+   "label": "Baseline acknowledged by",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "baseline_acknowledged_on",
+   "fieldtype": "Datetime",
+   "label": "Baseline acknowledged on",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "expected_actual_close",
+   "fieldtype": "Currency",
+   "label": "Expected actual balance at week end",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Opening actual balance + received - paid, this week only.",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "cash_discrepancy",
+   "fieldtype": "Currency",
+   "label": "Current-week discrepancy",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Actual balance at week end - expected actual balance at week end. A new discrepancy for THIS week. It is never folded into the historical difference.",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "cash_confirm_reason",
+   "fieldtype": "Small Text",
+   "label": "Exception acknowledged: reason",
+   "read_only": 1,
+   "no_copy": 1,
+   "description": "Acknowledging an exception records that Finance has seen it. It does not mean the balance reconciles and it does not resolve the difference.",
+   "print_hide": 1
+  },
+  {
+   "fieldname": "cash_confirm_evidence",
+   "fieldtype": "Small Text",
+   "label": "Exception acknowledged: supporting evidence",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "cash_approval_kind",
+   "fieldtype": "Select",
+   "options": "\nCash agrees; historical difference carried\nNew cash exception approved",
+   "label": "Cash position at approval",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "balance_effective_on",
+   "fieldtype": "Date",
+   "label": "Balance is as at the opening of",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "The day the supplied balance is the opening balance OF. Normally the Monday after the week ended. This is not the day it was received."
+  },
+  {
+   "fieldname": "paid_before_balance_date_amt",
+   "fieldtype": "Currency",
+   "label": "Paid between the week end and the balance date",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "With a Monday opening balance this is Sunday's payments only. Monday's own lines come after the balance and are not included."
+  },
+  {
+   "fieldname": "received_before_balance_date_amt",
+   "fieldtype": "Currency",
+   "label": "Received between the week end and the balance date",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "actual_at_week_end",
+   "fieldtype": "Currency",
+   "label": "Actual balance at week end (Saturday closing)",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1,
+   "description": "Supplied Monday opening + Sunday payments - Sunday receipts. This is what is compared with the expected actual balance, and what the next week opens with."
+  },
+  {
+   "fieldname": "balance_reviewed_on",
+   "fieldtype": "Date",
+   "label": "Balance received and reviewed on",
+   "description": "The day the balance was received and reviewed. Normally the Wednesday. It is not the day the balance is of.",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "balance_components",
+   "fieldtype": "Long Text",
+   "label": "Supplied balance, by component",
+   "description": "Cash in hand, corporate M-Pesa and personal M-Pesa, each with the balance supplied and how much of it belongs to this float. A personal M-Pesa balance is not taken to be company money: only its stated float portion counts.",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "opening_snapshot_amount",
+   "fieldtype": "Currency",
+   "label": "Opening: balance supplied (this float)",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "opening_snapshot_on",
+   "fieldtype": "Date",
+   "label": "Opening: balance is as at the opening of",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "opening_reviewed_on",
+   "fieldtype": "Date",
+   "label": "Opening: balance received and reviewed on",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
+  },
+  {
+   "fieldname": "opening_components",
+   "fieldtype": "Long Text",
+   "label": "Opening: supplied balance, by component",
+   "read_only": 1,
+   "no_copy": 1,
+   "print_hide": 1
   }
  ],
  "links": [],

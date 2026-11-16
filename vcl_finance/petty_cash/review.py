@@ -250,3 +250,21 @@ def post_done(week_ending, float_name="Cash"):
         raise
     frappe.db.commit()
     return {"posted": len(done), "journals": made}
+
+
+@frappe.whitelist()
+def qbo_accounts(txt=""):
+    """QuickBooks accounts for the review screen's picker, searched and shown by NAME.
+
+    The QBO Account record is named by its QuickBooks id, so the standard link search
+    matched and returned numbers. The id is what is stored; the name is what people read.
+    """
+    _require_reviewer()
+    txt = (txt or "").strip()
+    filters = {"active": 1}
+    if txt:
+        filters["fully_qualified_name"] = ("like", f"%{txt}%")
+    rows = frappe.get_all("QBO Account", filters=filters,
+                          fields=["qbo_id", "fully_qualified_name", "account_type"],
+                          order_by="fully_qualified_name asc", limit_page_length=30)
+    return [{"value": r.qbo_id, "label": r.fully_qualified_name, "type": r.account_type} for r in rows]
